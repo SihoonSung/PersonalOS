@@ -1,0 +1,81 @@
+import SwiftUI
+
+enum Theme {
+    // MARK: - Colors
+    static let accent = Color("AccentColor")
+    static let background = Color(.systemBackground)
+    static let secondaryBackground = Color(.secondarySystemBackground)
+    static let groupedBackground = Color(.systemGroupedBackground)
+
+    static let expenseRed = Color(.systemRed)
+    static let incomeGreen = Color(red: 0.2, green: 0.78, blue: 0.35)
+    static let positiveGreen = Color(red: 0.2, green: 0.78, blue: 0.35)
+    static let negativeRed = Color(.systemRed)
+    static let neutralGray = Color(.secondaryLabel)
+
+    static let priorityHigh = Color(.systemRed)
+    static let priorityMedium = Color(.systemOrange)
+    static let priorityLow = Color(.systemBlue)
+
+    // MARK: - Typography
+    static func largeTitle() -> Font { .largeTitle.bold() }
+    static func title() -> Font { .title2.bold() }
+    static func headline() -> Font { .headline }
+    static func body() -> Font { .body }
+    static func caption() -> Font { .caption }
+    static func caption2() -> Font { .caption2 }
+
+    // MARK: - Spacing
+    static let spacingXS: CGFloat = 4
+    static let spacingS: CGFloat = 8
+    static let spacingM: CGFloat = 16
+    static let spacingL: CGFloat = 24
+    static let spacingXL: CGFloat = 32
+
+    // MARK: - Corner Radius
+    static let radiusS: CGFloat = 8
+    static let radiusM: CGFloat = 12
+    static let radiusL: CGFloat = 16
+    static let radiusXL: CGFloat = 20
+
+    // MARK: - Card Style
+    static func card() -> some ViewModifier { CardModifier() }
+}
+
+struct CardModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(Theme.spacingM)
+            .background(Theme.secondaryBackground)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.radiusM))
+    }
+}
+
+extension View {
+    func cardStyle() -> some View {
+        modifier(CardModifier())
+    }
+}
+
+// MARK: - Amount Formatting
+
+extension Double {
+    func formattedKRW() -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        return "₩" + (formatter.string(from: NSNumber(value: self)) ?? "\(Int(self))")
+    }
+
+    func formattedUSD() -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: self)) ?? "$\(self)"
+    }
+
+    func formattedAmount(currency: String = "KRW") -> String {
+        currency == "USD" ? formattedUSD() : formattedKRW()
+    }
+}
