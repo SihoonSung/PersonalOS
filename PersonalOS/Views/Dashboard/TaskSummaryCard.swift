@@ -15,17 +15,17 @@ struct TaskSummaryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.spacingS) {
-            Label("할 일", systemImage: "checkmark.circle.fill")
+            Label(L.taskSummaryLabel, systemImage: "checkmark.circle.fill")
                 .font(Theme.caption().bold())
                 .foregroundStyle(.secondary)
 
             HStack(spacing: Theme.spacingL) {
-                StatPill(value: todayCount, label: "오늘", color: .blue)
+                StatPill(value: todayCount, label: L.taskToday, color: .blue)
                 if overdueCount > 0 {
-                    StatPill(value: overdueCount, label: "연체", color: .red)
+                    StatPill(value: overdueCount, label: L.taskOverdue, color: .red)
                 }
                 Spacer()
-                Text("\(incompleteTasks.count)개 남음")
+                Text(L.taskRemaining(incompleteTasks.count))
                     .font(Theme.caption())
                     .foregroundStyle(.secondary)
             }

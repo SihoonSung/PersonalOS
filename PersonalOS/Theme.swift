@@ -61,18 +61,11 @@ extension View {
 
 extension Double {
     func formattedKRW() -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return "₩" + (formatter.string(from: NSNumber(value: self)) ?? "\(Int(self))")
+        Currency.krw.format(self)
     }
 
     func formattedUSD() -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: self)) ?? "$\(self)"
+        Currency.usd.format(self)
     }
 
     func formattedAmount(currency: String = "KRW") -> String {

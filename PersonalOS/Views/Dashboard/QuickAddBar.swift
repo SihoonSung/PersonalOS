@@ -4,9 +4,10 @@ import SwiftData
 struct QuickAddBar: View {
     @Environment(\.modelContext) private var context
     @Environment(AIAvailabilityManager.self) private var aiAvailability
+    @Environment(CalendarService.self) private var calendarService
+    @AppStorage("defaultCurrency") private var defaultCurrency: String = Currency.krw.rawValue
 
     @State private var inputText = ""
-    @State private var isExpanded = false
     @State private var isParsing = false
 
     // 파싱 결과
@@ -14,15 +15,40 @@ struct QuickAddBar: View {
     @State private var parsedBudget: ParsedBudgetInput?
     @State private var detectedType: InputType = .unknown
 
+    // AI 꺼진 상태에서 수동 타입 선택
+    @State private var manualType: InputType = .todo
+
     // 저장 완료 피드백
     @State private var savedMessage: String?
 
     private let parsingService = AIParsingService()
 
-    enum InputType { case todo, budget, unknown }
+    enum InputType: String, CaseIterable {
+        case todo, budget, unknown
+
+        var label: String {
+            switch self {
+            case .todo:    return L.quickAddTypeTodo
+            case .budget:  return L.quickAddTypeBudget
+            case .unknown: return ""
+            }
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
+            // AI 꺼진 상태 — 타입 선택 세그먼트
+            if !aiAvailability.isAvailable && !inputText.isEmpty {
+                Picker(L.quickAddTypeLabel, selection: $manualType) {
+                    Text(L.quickAddTypeTodo).tag(InputType.todo)
+                    Text(L.quickAddTypeBudget).tag(InputType.budget)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, Theme.spacingM)
+                .padding(.bottom, Theme.spacingS)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             // 파싱 미리보기
             if isParsing {
                 ShimmerChips()
@@ -39,11 +65,11 @@ struct QuickAddBar: View {
 
             // 입력창
             HStack(spacing: Theme.spacingS) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.blue)
+                Image(systemName: aiAvailability.isAvailable ? "sparkles" : "pencil")
+                    .foregroundStyle(aiAvailability.isAvailable ? .blue : .secondary)
                     .font(.system(size: 16))
 
-                TextField("할 일이나 지출을 입력해 보세요...", text: $inputText)
+                TextField(placeholderText, text: $inputText)
                     .font(Theme.body())
                     .onSubmit { Task { await save() } }
                     .onChange(of: inputText) { _, newValue in
@@ -51,8 +77,8 @@ struct QuickAddBar: View {
                     }
 
                 if !inputText.isEmpty {
-                    if isParsing || parsedTodo != nil || parsedBudget != nil {
-                        Button("저장") { Task { await save() } }
+                    if isParsing || parsedTodo != nil || parsedBudget != nil || !aiAvailability.isAvailable {
+                        Button(L.quickAddSave) { Task { await save() } }
                             .font(Theme.body().bold())
                             .foregroundStyle(.blue)
                     }
@@ -61,6 +87,7 @@ struct QuickAddBar: View {
                         parsedTodo = nil
                         parsedBudget = nil
                         detectedType = .unknown
+                        debounceTask?.cancel()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
@@ -75,6 +102,7 @@ struct QuickAddBar: View {
         .animation(.spring(duration: 0.3), value: isParsing)
         .animation(.spring(duration: 0.3), value: parsedTodo?.title)
         .animation(.spring(duration: 0.3), value: parsedBudget?.merchant)
+        .animation(.spring(duration: 0.3), value: inputText.isEmpty)
         .overlay(alignment: .top) {
             if let msg = savedMessage {
                 Text(msg)
@@ -90,6 +118,11 @@ struct QuickAddBar: View {
         }
     }
 
+    private var placeholderText: String {
+        if aiAvailability.isAvailable { return L.quickAddPlaceholderAI }
+        return manualType == .budget ? L.quickAddPlaceholderBudget : L.quickAddPlaceholderTodo
+    }
+
     // MARK: - AI 파싱 (400ms 디바운스)
 
     @State private var debounceTask: Task<Void, Never>?
@@ -102,7 +135,9 @@ struct QuickAddBar: View {
             detectedType = .unknown
             return
         }
-
+        parsedTodo = nil
+        parsedBudget = nil
+        detectedType = .unknown
         debounceTask = Task {
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
@@ -114,32 +149,54 @@ struct QuickAddBar: View {
     private func parseInput(_ text: String) async {
         guard aiAvailability.isAvailable else { return }
         isParsing = true
-
-        // 간단한 휴리스틱: 숫자+원/달러 포함 → 가계부, 그 외 → 할 일
-        let budgetKeywords = ["원", "달러", "$", "₩", "만원", "천원", "월급", "급여"]
-        let looksLikeBudget = budgetKeywords.contains { text.contains($0) }
+        defer { isParsing = false }
 
         do {
-            if looksLikeBudget {
-                let result = try await parsingService.parseBudget(input: text)
-                if !Task.isCancelled {
-                    parsedBudget = result
-                    parsedTodo = nil
-                    detectedType = .budget
-                }
-            } else {
-                let result = try await parsingService.parseTodo(input: text)
-                if !Task.isCancelled {
-                    parsedTodo = result
-                    parsedBudget = nil
-                    detectedType = .todo
-                }
-            }
+            let dateContext = ParsingDateContext.current()
+            let classification = try await parsingService.classifyInput(input: text)
+            let type = normalizedType(from: classification.type) ?? keywordFallbackType(for: text)
+            try await parse(text, as: type, dateContext: dateContext)
         } catch {
-            // AI 실패 시 조용히 무시 — 수동 저장 가능
+            try? await parse(text, as: keywordFallbackType(for: text), dateContext: .current())
         }
+    }
 
-        isParsing = false
+    private func normalizedType(from rawType: String) -> InputType? {
+        switch rawType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "todo", "task", "reminder":
+            return .todo
+        case "budget", "expense", "income", "transaction":
+            return .budget
+        default:
+            return nil
+        }
+    }
+
+    private func keywordFallbackType(for text: String) -> InputType {
+        let budgetKeywords = ["원", "달러", "$", "₩", "만원", "천원", "월급", "급여"]
+        return budgetKeywords.contains { text.contains($0) } ? .budget : .todo
+    }
+
+    @MainActor
+    private func parse(_ text: String, as type: InputType, dateContext: ParsingDateContext) async throws {
+        switch type {
+        case .budget:
+            let result = try await parsingService.parseBudget(
+                input: text,
+                defaultCurrency: defaultCurrency,
+                dateContext: dateContext
+            )
+            guard !Task.isCancelled, inputText == text else { return }
+            parsedBudget = result
+            parsedTodo = nil
+            detectedType = .budget
+        case .todo, .unknown:
+            let result = try await parsingService.parseTodo(input: text, dateContext: dateContext)
+            guard !Task.isCancelled, inputText == text else { return }
+            parsedTodo = result
+            parsedBudget = nil
+            detectedType = .todo
+        }
     }
 
     // MARK: - 저장
@@ -148,31 +205,57 @@ struct QuickAddBar: View {
     private func save() async {
         let text = inputText.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return }
+        debounceTask?.cancel()
+
+        // 파싱이 끝나기 전에 저장을 누른 경우(레이스) → 먼저 파싱을 완료시킨다.
+        // 이게 없으면 "버스 2000원" 같은 가계부 입력이 할 일로 잘못 저장될 수 있음.
+        if aiAvailability.isAvailable, parsedTodo == nil, parsedBudget == nil {
+            await parseInput(text)
+        }
+        isParsing = false
 
         let feedback = UIImpactFeedbackGenerator(style: .medium)
         feedback.impactOccurred()
 
         if let todo = parsedTodo {
             saveTodo(from: todo, raw: text)
-            savedMessage = "'\(todo.title)' 추가됨"
+            savedMessage = L.quickAddSavedTodo(todo.title)
         } else if let budget = parsedBudget {
             saveBudget(from: budget, raw: text)
-            savedMessage = "\(budget.merchant) \(budget.amount.formattedKRW()) 기록됨"
+            let currencyCode = budget.currency.isEmpty ? defaultCurrency : budget.currency.uppercased()
+            let cur = Currency(rawValue: currencyCode) ?? .krw
+            savedMessage = L.quickAddSavedBudget(budget.merchant, cur.format(budget.amount))
         } else {
-            // AI 파싱 없이 기본 할 일로 저장
-            let item = TodoItem(title: text, rawInput: text)
-            context.insert(item)
-            savedMessage = "'\(text)' 추가됨"
+            // AI 미지원이거나 파싱 실패 → 로컬 폴백.
+            // AI 꺼짐: 사용자가 고른 세그먼트(manualType) / AI 켜짐인데 실패: 키워드로 추론.
+            let type: InputType = aiAvailability.isAvailable ? keywordFallbackType(for: text) : manualType
+            if type == .budget {
+                let parsed = AmountParser.parse(text, defaultCurrency: defaultCurrency)
+                let entry = BudgetEntry(
+                    amount: parsed.amount,
+                    currency: Currency(rawValue: parsed.currency) ?? .krw,
+                    type: .expense,
+                    merchant: text,
+                    rawInput: text
+                )
+                context.insert(entry)
+                let cur = Currency(rawValue: parsed.currency) ?? .krw
+                savedMessage = L.quickAddSavedBudget(text, cur.format(parsed.amount))
+            } else {
+                let item = TodoItem(title: text, rawInput: text)
+                context.insert(item)
+                savedMessage = L.quickAddSavedTodo(text)
+            }
         }
 
         try? context.save()
+        WidgetDataWriter.refresh(context: context, defaultCurrency: defaultCurrency)
+        BudgetAlertService.check(context: context)
         inputText = ""
         parsedTodo = nil
         parsedBudget = nil
         detectedType = .unknown
 
-        // 저장 메시지 1.5초 후 사라짐
-        withAnimation { }
         try? await Task.sleep(for: .milliseconds(1500))
         withAnimation { savedMessage = nil }
     }
@@ -190,19 +273,25 @@ struct QuickAddBar: View {
         if item.dueDate != nil {
             Task { await NotificationService.requestPermission() }
             NotificationService.scheduleTodoReminder(for: item)
+            if let identifier = calendarService.addEvent(for: item) {
+                item.calendarEventIdentifier = identifier
+            }
         }
     }
 
     private func saveBudget(from parsed: ParsedBudgetInput, raw: String) {
+        let currency = Currency(rawValue: parsed.currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()) ?? Currency(rawValue: defaultCurrency) ?? .krw
         let entry = BudgetEntry(
             amount: parsed.amount,
-            type: parsed.type,
+            currency: currency,
+            type: parsed.type == "income" ? .income : .expense,
             merchant: parsed.merchant,
-            category: parsed.category,
+            category: BudgetCategory.from(parsed.category),
             note: parsed.note ?? "",
             date: parseISODate(parsed.dateISO) ?? .now,
             rawInput: raw
         )
         context.insert(entry)
     }
+
 }

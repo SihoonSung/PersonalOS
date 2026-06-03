@@ -3,6 +3,7 @@ import SwiftData
 
 struct TaskRowView: View {
     @Environment(\.modelContext) private var context
+    @Environment(CalendarService.self) private var calendarService
     let task: TodoItem
 
     var body: some View {
@@ -34,7 +35,7 @@ struct TaskRowView: View {
                         dueDateChip(dueDate)
                     }
                     if let rule = task.repeatRule, !rule.isEmpty {
-                        Label("반복", systemImage: "repeat")
+                        Label(L.tasksRepeat, systemImage: "repeat")
                             .font(Theme.caption2())
                             .foregroundStyle(.secondary)
                     }
@@ -78,14 +79,12 @@ struct TaskRowView: View {
         feedback.impactOccurred()
 
         withAnimation(.spring(duration: 0.3)) {
-            task.isCompleted.toggle()
-            task.completedAt = task.isCompleted ? .now : nil
+            TodoLifecycleService.setCompleted(
+                task,
+                completed: !task.isCompleted,
+                context: context,
+                calendarService: calendarService
+            )
         }
-
-        if !task.isCompleted {
-            NotificationService.cancelTodoReminder(todoID: task.id)
-        }
-
-        try? context.save()
     }
 }

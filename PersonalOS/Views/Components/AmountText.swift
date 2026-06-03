@@ -2,11 +2,13 @@ import SwiftUI
 
 struct AmountText: View {
     let amount: Double
+    var currency: String = "KRW"
     let isExpense: Bool
     var font: Font = Theme.body()
 
     var body: some View {
-        Text(amount.formattedKRW())
+        let cur = Currency(rawValue: currency) ?? .krw
+        Text(cur.format(amount))
             .font(font)
             .foregroundStyle(isExpense ? Theme.expenseRed : Theme.incomeGreen)
             .monospacedDigit()
@@ -22,7 +24,7 @@ struct PnLText: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text("\(isPositive ? "+" : "")\(value.formattedKRW())")
+            Text("\(isPositive ? "+" : "")\(Currency.usd.format(value))")
                 .font(font)
                 .foregroundStyle(isPositive ? Theme.positiveGreen : Theme.negativeRed)
                 .monospacedDigit()

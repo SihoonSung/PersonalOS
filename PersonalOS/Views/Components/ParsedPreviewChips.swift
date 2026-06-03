@@ -49,35 +49,25 @@ struct TodoPreviewChips: View {
         }
     }
 
-    private func priorityLabel(_ p: Int) -> String {
-        switch p {
-        case 3: return "높음"
-        case 2: return "보통"
-        case 1: return "낮음"
-        default: return ""
-        }
-    }
+    private func priorityLabel(_ p: Int) -> String { L.priorityLabel(p) }
 
     private func priorityColor(_ p: Int) -> Color {
-        switch p {
-        case 3: return .red
-        case 2: return .orange
-        default: return .blue
+        switch Priority(rawValue: p) ?? .none {
+        case .high:   return .red
+        case .medium: return .orange
+        case .low:    return .blue
+        case .none:   return .gray
         }
     }
 
-    private func repeatLabel(_ rule: String) -> String {
-        if rule.contains("DAILY") { return "매일" }
-        if rule.contains("WEEKLY") { return "매주" }
-        if rule.contains("MONTHLY") { return "매월" }
-        return "반복"
-    }
+    private func repeatLabel(_ rule: String) -> String { L.repeatLabel(rule) }
 }
 
 // MARK: - Budget 파싱 결과 미리보기
 
 struct BudgetPreviewChips: View {
     let parsed: ParsedBudgetInput
+    @AppStorage("defaultCurrency") private var defaultCurrency: String = Currency.krw.rawValue
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -85,22 +75,25 @@ struct BudgetPreviewChips: View {
                 // 상호명 칩
                 PreviewChip(
                     icon: "storefront",
-                    text: parsed.merchant.isEmpty ? "알 수 없음" : parsed.merchant,
+                    text: parsed.merchant.isEmpty ? L.chipUnknownMerchant : parsed.merchant,
                     color: .indigo
                 )
 
                 // 금액 칩
                 let isExpense = parsed.type == "expense"
+                let currencyCode = parsed.currency.isEmpty ? defaultCurrency : parsed.currency.uppercased()
+                let cur = Currency(rawValue: currencyCode) ?? .krw
                 PreviewChip(
                     icon: isExpense ? "minus.circle.fill" : "plus.circle.fill",
-                    text: parsed.amount.formattedKRW(),
+                    text: cur.format(parsed.amount),
                     color: isExpense ? Theme.expenseRed : Theme.incomeGreen
                 )
 
                 // 카테고리 칩
+                let category = BudgetCategory.from(parsed.category)
                 PreviewChip(
-                    icon: BudgetCategory(rawValue: parsed.category)?.icon ?? "tag",
-                    text: parsed.category,
+                    icon: category.icon,
+                    text: category.localizedName,
                     color: .teal
                 )
 
@@ -108,7 +101,7 @@ struct BudgetPreviewChips: View {
                 if let date = parseISODate(parsed.dateISO) {
                     PreviewChip(
                         icon: "calendar",
-                        text: Calendar.current.isDateInToday(date) ? "오늘" : date.formatted(.dateTime.month().day()),
+                        text: Calendar.current.isDateInToday(date) ? L.tasksFilterToday : date.formatted(.dateTime.month().day()),
                         color: .gray
                     )
                 }

@@ -6,25 +6,20 @@ struct RootTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             DashboardView()
-                .tabItem { Label("홈", systemImage: "house.fill") }
+                .tabItem { Label(L.tabHome, systemImage: "house.fill") }
                 .tag(0)
 
             TasksView()
-                .tabItem { Label("할 일", systemImage: "checkmark.circle.fill") }
+                .tabItem { Label(L.tabTasks, systemImage: "checkmark.circle.fill") }
                 .tag(1)
 
             BudgetView()
-                .tabItem { Label("가계부", systemImage: "wonsign.circle.fill") }
+                .tabItem { Label(L.tabBudget, systemImage: "creditcard.fill") }
                 .tag(2)
 
-            // Month-1: 투자, AI 탭 추가 예정
-            // InvestmentView()
-            //     .tabItem { Label("투자", systemImage: "chart.line.uptrend.xyaxis") }
-            //     .tag(3)
-            //
-            // AIAssistantView()
-            //     .tabItem { Label("AI", systemImage: "sparkles") }
-            //     .tag(4)
+            SettingsView()
+                .tabItem { Label(L.tabSettings, systemImage: "person.circle.fill") }
+                .tag(3)
         }
         .tint(.blue)
     }

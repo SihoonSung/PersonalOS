@@ -46,6 +46,6 @@ final class Goal {
     var progressPercent: Int { Int(progress * 100) }
 
     var goalCategory: GoalCategory {
-        GoalCategory(rawValue: category) ?? .other
+        GoalCategory.from(category)
     }
 }

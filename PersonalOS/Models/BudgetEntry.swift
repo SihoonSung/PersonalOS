@@ -5,9 +5,10 @@ import Foundation
 final class BudgetEntry {
     var id: UUID
     var amount: Double
-    var type: String           // "expense" | "income"
+    var currency: String = "KRW"       // Currency.rawValue
+    var type: String                   // EntryType.rawValue
     var merchant: String
-    var category: String       // BudgetCategory.rawValue
+    var category: String               // BudgetCategory.rawValue
     var note: String
     var date: Date
     var createdAt: Date
@@ -16,9 +17,10 @@ final class BudgetEntry {
     init(
         id: UUID = UUID(),
         amount: Double,
-        type: String = "expense",
+        currency: Currency = .krw,
+        type: EntryType = .expense,
         merchant: String = "",
-        category: String = BudgetCategory.other.rawValue,
+        category: BudgetCategory = .other,
         note: String = "",
         date: Date = .now,
         createdAt: Date = .now,
@@ -26,18 +28,22 @@ final class BudgetEntry {
     ) {
         self.id = id
         self.amount = amount
-        self.type = type
+        self.currency = currency.rawValue
+        self.type = type.rawValue
         self.merchant = merchant
-        self.category = category
+        self.category = category.rawValue
         self.note = note
         self.date = date
         self.createdAt = createdAt
         self.rawInput = rawInput
     }
 
-    var isExpense: Bool { type == "expense" }
+    var isExpense: Bool { type == EntryType.expense.rawValue }
+
+    var entryType: EntryType { EntryType(rawValue: type) ?? .expense }
+    var currencyEnum: Currency { Currency(rawValue: currency) ?? .krw }
 
     var budgetCategory: BudgetCategory {
-        BudgetCategory(rawValue: category) ?? .other
+        BudgetCategory.from(category)
     }
 }

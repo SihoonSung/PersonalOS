@@ -11,7 +11,7 @@ struct AIUnavailableBanner: View {
                 .font(Theme.caption())
                 .foregroundStyle(.secondary)
             Spacer()
-            Button("설정") {
+            Button(L.aiBannerSettings) {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }

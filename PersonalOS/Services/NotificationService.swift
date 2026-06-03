@@ -12,7 +12,7 @@ final class NotificationService {
         guard let dueDate = todo.dueDate else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "마감 임박"
+        content.title = L.notificationDueSoon
         content.body = todo.title
         content.sound = .default
 

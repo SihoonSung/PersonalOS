@@ -17,12 +17,12 @@ struct BudgetRowView: View {
 
             // 내용
             VStack(alignment: .leading, spacing: 3) {
-                Text(entry.merchant.isEmpty ? entry.category : entry.merchant)
+                Text(entry.merchant.isEmpty ? entry.budgetCategory.localizedName : entry.merchant)
                     .font(Theme.body())
                     .lineLimit(1)
 
                 HStack(spacing: Theme.spacingS) {
-                    Text(entry.category)
+                    Text(entry.budgetCategory.localizedName)
                         .font(Theme.caption2())
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 6)
@@ -42,7 +42,7 @@ struct BudgetRowView: View {
             Spacer()
 
             // 금액
-            AmountText(amount: entry.amount, isExpense: entry.isExpense, font: Theme.body())
+            AmountText(amount: entry.amount, currency: entry.currency, isExpense: entry.isExpense, font: Theme.body())
         }
         .padding(.vertical, Theme.spacingXS)
     }

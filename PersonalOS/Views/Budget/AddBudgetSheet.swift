@@ -5,6 +5,7 @@ struct AddBudgetSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(AIAvailabilityManager.self) private var aiAvailability
+    @AppStorage("defaultCurrency") private var defaultCurrency: String = Currency.krw.rawValue
 
     @State private var inputText = ""
     @State private var isParsing = false
@@ -16,6 +17,7 @@ struct AddBudgetSheet: View {
     @State private var manualAmountText = ""
     @State private var manualType = "expense"
     @State private var manualCategory = BudgetCategory.other.rawValue
+    @State private var manualCurrency = "KRW"
     @State private var manualDate: Date = .now
     @State private var manualNote = ""
 
@@ -30,7 +32,7 @@ struct AddBudgetSheet: View {
                         AIUnavailableBanner(message: aiAvailability.unavailableReason)
                     }
 
-                    Text("자연어로 입력")
+                    Text(L.addBudgetNLTitle)
                         .font(Theme.caption().bold())
                         .foregroundStyle(.secondary)
 
@@ -41,7 +43,7 @@ struct AddBudgetSheet: View {
                         .background(Theme.secondaryBackground)
                         .clipShape(RoundedRectangle(cornerRadius: Theme.radiusS))
 
-                    Text("예시: \"스타벅스 6000원\", \"어제 택시 12000원\", \"월급 280만원\"")
+                    Text(L.addBudgetNLExample)
                         .font(Theme.caption())
                         .foregroundStyle(.secondary)
 
@@ -49,7 +51,7 @@ struct AddBudgetSheet: View {
                         Button {
                             Task { await parseInput() }
                         } label: {
-                            Label(isParsing ? "분석 중..." : "AI로 분석", systemImage: "sparkles")
+                            Label(isParsing ? L.addBudgetAIParsing : L.addBudgetAIAnalyze, systemImage: "sparkles")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
@@ -63,7 +65,7 @@ struct AddBudgetSheet: View {
                     ShimmerChips().padding(.bottom, Theme.spacingS)
                 } else if let parsed = parsedResult {
                     VStack(alignment: .leading, spacing: Theme.spacingS) {
-                        Text("파싱 결과")
+                        Text(L.addBudgetParsedTitle)
                             .font(Theme.caption().bold())
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, Theme.spacingM)
@@ -77,66 +79,59 @@ struct AddBudgetSheet: View {
                 Form {
                     // 수입/지출 토글
                     Section {
-                        Picker("유형", selection: $manualType) {
-                            Text("지출").tag("expense")
-                            Text("수입").tag("income")
+                        Picker(L.addBudgetType, selection: $manualType) {
+                            Text(L.addBudgetExpense).tag("expense")
+                            Text(L.addBudgetIncome).tag("income")
                         }
                         .pickerStyle(.segmented)
                     }
 
-                    Section("내용") {
-                        TextField("상호명 / 내용", text: $manualMerchant)
+                    Section(L.addBudgetContentSection) {
+                        TextField(L.addBudgetMerchant, text: $manualMerchant)
                         HStack {
-                            Text("금액")
+                            Text(L.addBudgetAmount)
                             Spacer()
-                            TextField("0", text: $manualAmountText)
-                                .keyboardType(.numberPad)
+                            TextField(L.addBudgetAmountZero, text: $manualAmountText)
+                                .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .onChange(of: manualAmountText) { _, v in
-                                    manualAmount = Double(v.filter { $0.isNumber }) ?? 0
+                                    manualAmount = v.sanitizedDouble ?? 0
                                 }
-                            Text("원")
-                                .foregroundStyle(.secondary)
+                            Picker("", selection: $manualCurrency) {
+                                ForEach(Currency.allCases, id: \.rawValue) { c in
+                                    Text(c.symbol).tag(c.rawValue)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
                         }
                     }
 
-                    Section("카테고리") {
-                        Picker("카테고리", selection: $manualCategory) {
+                    Section(L.addBudgetCategory) {
+                        Picker(L.addBudgetCategory, selection: $manualCategory) {
                             ForEach(BudgetCategory.allCases, id: \.rawValue) { cat in
-                                Label(cat.rawValue, systemImage: cat.icon).tag(cat.rawValue)
+                                Label(cat.localizedName, systemImage: cat.icon).tag(cat.rawValue)
                             }
                         }
                         .pickerStyle(.menu)
                     }
 
-                    Section("날짜 / 메모") {
-                        DatePicker("날짜", selection: $manualDate, displayedComponents: .date)
+                    Section(L.addBudgetDateMemo) {
+                        DatePicker(L.addBudgetDate, selection: $manualDate, displayedComponents: .date)
                             .datePickerStyle(.compact)
-                        TextField("메모 (선택)", text: $manualNote)
+                        TextField(L.addBudgetNote, text: $manualNote)
                     }
                 }
-                .onChange(of: parsedResult) { _, parsed in
-                    if let p = parsed {
-                        manualMerchant = p.merchant
-                        manualAmount = p.amount
-                        manualAmountText = String(Int(p.amount))
-                        manualType = p.type
-                        manualCategory = p.category
-                        if let date = parseISODate(p.dateISO) {
-                            manualDate = date
-                        }
-                        manualNote = p.note ?? ""
-                    }
-                }
+                .onAppear { manualCurrency = defaultCurrency }
             }
-            .navigationTitle("지출/수입 추가")
+            .navigationTitle(L.addBudgetNavTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("취소") { dismiss() }
+                    Button(L.addBudgetCancel) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("저장") { saveEntry() }
+                    Button(L.addBudgetSave) { saveEntry() }
                         .bold()
                         .disabled(manualAmount <= 0)
                 }
@@ -149,11 +144,32 @@ struct AddBudgetSheet: View {
         isParsing = true
         parsedResult = nil
 
+        let dateContext = ParsingDateContext.current()
         let result = await withAIFallback(fallback: nil as ParsedBudgetInput?) {
-            try await parsingService.parseBudget(input: inputText)
+            try await parsingService.parseBudget(
+                input: inputText,
+                defaultCurrency: defaultCurrency,
+                dateContext: dateContext
+            )
         }
         parsedResult = result
+        if let result {
+            applyParsedResult(result)
+        }
         isParsing = false
+    }
+
+    private func applyParsedResult(_ p: ParsedBudgetInput) {
+        manualMerchant = p.merchant
+        manualAmount = p.amount
+        let normalizedCurrency = Currency(rawValue: p.currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())?.rawValue ?? defaultCurrency
+        let parsedCur = Currency(rawValue: normalizedCurrency) ?? .krw
+        manualAmountText = parsedCur == .usd ? String(format: "%.2f", p.amount) : String(Int(p.amount))
+        manualType = p.type == "income" ? "income" : "expense"
+        manualCategory = BudgetCategory.from(p.category).rawValue
+        manualCurrency = normalizedCurrency
+        manualDate = parseISODate(p.dateISO) ?? .now
+        manualNote = p.note ?? ""
     }
 
     private func saveEntry() {
@@ -164,15 +180,18 @@ struct AddBudgetSheet: View {
 
         let entry = BudgetEntry(
             amount: manualAmount,
-            type: manualType,
+            currency: Currency(rawValue: manualCurrency) ?? .krw,
+            type: manualType == "income" ? .income : .expense,
             merchant: manualMerchant.trimmingCharacters(in: .whitespaces),
-            category: manualCategory,
+            category: BudgetCategory.from(manualCategory),
             note: manualNote.trimmingCharacters(in: .whitespaces),
             date: manualDate,
             rawInput: inputText.isEmpty ? nil : inputText
         )
         context.insert(entry)
         try? context.save()
+        WidgetDataWriter.refresh(context: context, defaultCurrency: defaultCurrency)
+        BudgetAlertService.check(context: context)
         dismiss()
     }
 }
