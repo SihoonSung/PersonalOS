@@ -6,7 +6,7 @@ struct CalendarCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.spacingS) {
-            Label(L.calendarTitle, systemImage: "calendar")
+            Text(L.calendarTitle)
                 .font(Theme.caption().bold())
                 .foregroundStyle(.secondary)
 
@@ -57,7 +57,8 @@ struct CalendarCard: View {
                 EmptyView()
             }
         }
-        .cardStyle()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCardStyle()
     }
 
     private var requestAccessButton: some View {

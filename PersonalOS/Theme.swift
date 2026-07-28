@@ -55,6 +55,22 @@ extension View {
     func cardStyle() -> some View {
         modifier(CardModifier())
     }
+
+    /// Liquid Glass 카드 — 대시보드 전용
+    func glassCardStyle(cornerRadius: CGFloat = Theme.radiusXL, interactive: Bool = false) -> some View {
+        self
+            .padding(Theme.spacingM)
+            .glassEffect(
+                interactive ? .regular.interactive() : .regular,
+                in: .rect(cornerRadius: cornerRadius)
+            )
+    }
+}
+
+extension Theme {
+    /// 글래스 대시보드 — 게이지/차트용 절제된 잉크 컬러 (모노크롬)
+    static let glassInk = Color.primary
+    static let glassTrack = Color.primary.opacity(0.08)
 }
 
 // MARK: - Amount Formatting

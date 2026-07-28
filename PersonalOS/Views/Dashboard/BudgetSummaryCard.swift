@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 
+/// 대시보드용 컴팩트 예산 글래스 카드
 struct BudgetSummaryCard: View {
     @Query private var allEntries: [BudgetEntry]
     @AppStorage("defaultCurrency") private var defaultCurrency: String = Currency.krw.rawValue
@@ -47,10 +48,6 @@ struct BudgetSummaryCard: View {
         }.reduce(0) { $0 + $1.amount }
     }
 
-    private var hasOtherCurrency: Bool {
-        currentMonthEntries.contains { $0.currency != defaultCurrency }
-    }
-
     private var budgetProgress: Double {
         guard monthlyBudget > 0 else { return 0 }
         return min(monthExpense / monthlyBudget, 1.0)
@@ -58,103 +55,63 @@ struct BudgetSummaryCard: View {
 
     private var isOverBudget: Bool { monthlyBudget > 0 && monthExpense > monthlyBudget }
 
+    private var mainAmount: Double {
+        monthlyBudget > 0 ? monthlyBudget - monthExpense : totalBalance
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.spacingS) {
-            Label(L.budgetMonthlyTitle, systemImage: "creditcard.fill")
+            Text(L.dashBudgetTitle)
                 .font(Theme.caption().bold())
                 .foregroundStyle(.secondary)
 
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(balanceText(totalBalance))
-                        .font(.title2.bold())
-                        .foregroundStyle(totalBalance >= 0 ? Theme.incomeGreen : Theme.expenseRed)
-                        .monospacedDigit()
-                    Text(L.budgetTotalBalance)
-                        .font(Theme.caption2())
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(primaryCurrency.format(monthIncome))
-                        .font(Theme.headline())
-                        .foregroundStyle(Theme.incomeGreen)
-                        .monospacedDigit()
-                    Text(L.budgetIncome)
-                        .font(Theme.caption2())
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Text(balanceText(mainAmount))
+                .font(.title3.bold())
+                .foregroundStyle(mainAmount >= 0 ? Color.primary : Theme.expenseRed)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
 
-            HStack {
-                Text("\(L.budgetCarryover) \(balanceText(carryover))")
-                    .font(Theme.caption2())
-                    .foregroundStyle(carryover >= 0 ? .secondary : Theme.expenseRed)
-                Spacer()
-                Text("\(L.budgetExpense) \(primaryCurrency.format(monthExpense))")
-                    .font(Theme.caption2())
-                    .foregroundStyle(.secondary)
-            }
-
-            // 예산 진행바
             if monthlyBudget > 0 {
-                VStack(alignment: .leading, spacing: 4) {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.secondary.opacity(0.15))
-                                .frame(height: 6)
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(isOverBudget ? Color.orange : Color.blue)
-                                .frame(width: geo.size.width * budgetProgress, height: 6)
-                                .animation(.spring(duration: 0.5), value: budgetProgress)
-                        }
-                    }
-                    .frame(height: 6)
+                if isOverBudget {
+                    Label(
+                        L.dashBudgetOver(primaryCurrency.format(monthExpense - monthlyBudget)),
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(Theme.caption2().bold())
+                    .foregroundStyle(.orange)
+                } else {
+                    Text(L.dashBudgetUsed(Int(budgetProgress * 100)))
+                        .font(Theme.caption2())
+                        .foregroundStyle(.secondary)
+                }
 
-                    HStack {
-                        if isOverBudget {
-                            Label(
-                                L.budgetOverBy(primaryCurrency.format(monthExpense - monthlyBudget)),
-                                systemImage: "exclamationmark.triangle.fill"
-                            )
-                            .font(Theme.caption2().bold())
-                            .foregroundStyle(.orange)
-                        } else {
-                            Text(L.budgetProgressPct(Int(budgetProgress * 100)))
-                                .font(Theme.caption2())
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text("/ \(primaryCurrency.format(monthlyBudget))")
-                            .font(Theme.caption2())
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Theme.glassTrack)
+                    GeometryReader { geo in
+                        Capsule()
+                            .fill(isOverBudget ? AnyShapeStyle(Color.orange) : AnyShapeStyle(Theme.glassInk.opacity(0.75)))
+                            .frame(width: geo.size.width * budgetProgress)
+                            .animation(.spring(duration: 0.5), value: budgetProgress)
                     }
                 }
-            }
-
-            if hasOtherCurrency {
-                Text(L.budgetOtherCurrency)
+                .frame(height: 5)
+            } else {
+                Text(L.budgetTotalBalance)
                     .font(Theme.caption2())
                     .foregroundStyle(.secondary)
             }
 
             if todayExpense > 0 {
-                Divider()
-                HStack {
-                    Text(L.budgetTodayExpense)
-                        .font(Theme.caption())
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(primaryCurrency.format(todayExpense))
-                        .font(Theme.caption().bold())
-                        .foregroundStyle(.primary)
-                        .monospacedDigit()
-                }
+                Text("\(L.dashTodaySpent) \(primaryCurrency.format(todayExpense))")
+                    .font(Theme.caption2())
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
         }
-        .cardStyle()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCardStyle()
     }
 
     private func balanceText(_ amount: Double) -> String {

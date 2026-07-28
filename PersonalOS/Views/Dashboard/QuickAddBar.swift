@@ -94,9 +94,9 @@ struct QuickAddBar: View {
                     }
                 }
             }
-            .padding(Theme.spacingM)
-            .background(Theme.secondaryBackground)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radiusL))
+            .padding(.horizontal, Theme.spacingM)
+            .padding(.vertical, 14)
+            .glassEffect(.regular.interactive(), in: .capsule)
             .padding(.horizontal, Theme.spacingM)
         }
         .animation(.spring(duration: 0.3), value: isParsing)
