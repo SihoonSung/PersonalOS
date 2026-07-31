@@ -66,9 +66,12 @@ struct DatabaseListView: View {
                     .contextMenu {
                         Button("삭제", role: .destructive) { delete(db) }
                     }
+                    .listRowBackground(Rectangle().fill(.ultraThinMaterial))
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(DashboardBackground())
         .navigationTitle("데이터베이스")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

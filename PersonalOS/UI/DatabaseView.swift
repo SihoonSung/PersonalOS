@@ -32,10 +32,12 @@ struct DatabaseView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            content
-            Divider()
-            QuickAddBar(database: database)
+        content
+        .background(DashboardBackground())
+        .safeAreaInset(edge: .bottom) {
+            QuickAddBar(database: database, style: .glass)
+                .padding(.horizontal, Theme.spacingM)
+                .padding(.bottom, Theme.spacingS)
         }
         .navigationTitle(database.name)
         .searchable(text: $searchText, prompt: "검색")
@@ -120,6 +122,7 @@ struct DatabaseView: View {
                 EntryRowView(entry: entry, database: database)
                     .contentShape(Rectangle())
                     .onTapGesture { editingEntry = entry }
+                    .listRowBackground(Rectangle().fill(.ultraThinMaterial))
             }
             .onDelete { offsets in
                 let items = filteredEntries
@@ -127,8 +130,9 @@ struct DatabaseView: View {
             }
         }
         #if os(iOS)
-        .listStyle(.plain)
+        .listStyle(.insetGrouped)
         #endif
+        .scrollContentBackground(.hidden)
     }
 
     #if os(macOS)

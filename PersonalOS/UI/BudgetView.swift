@@ -111,6 +111,7 @@ struct BudgetView: View {
                     categoryLegend
                 }
             }
+            .listRowBackground(Rectangle().fill(.ultraThinMaterial))
 
             if dayGroups.isEmpty {
                 Section {
@@ -119,6 +120,7 @@ struct BudgetView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                 }
+                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
             }
 
             ForEach(dayGroups, id: \.day) { group in
@@ -140,6 +142,7 @@ struct BudgetView: View {
         #else
         .listStyle(.insetGrouped)
         #endif
+        .scrollContentBackground(.hidden)
     }
 
     // MARK: Month navigation
@@ -237,8 +240,8 @@ struct BudgetView: View {
                 )
                 .foregroundStyle(
                     calendar.isDate(point.month, equalTo: monthAnchor, toGranularity: .month)
-                        ? AnyShapeStyle(Color.accentColor)
-                        : AnyShapeStyle(Color.accentColor.opacity(0.35))
+                        ? AnyShapeStyle(Theme.glassInk.opacity(0.75))
+                        : AnyShapeStyle(Theme.glassInk.opacity(0.25))
                 )
                 .cornerRadius(4)
             }
@@ -335,6 +338,7 @@ struct BudgetView: View {
             Button("편집") { editingEntry = item.entry }
             Button("삭제", role: .destructive) { delete(item.entry) }
         }
+        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
     }
 
     @ViewBuilder
@@ -376,8 +380,10 @@ struct BudgetView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+                        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
                     }
                 }
+                .scrollContentBackground(.hidden)
             }
         }
     }

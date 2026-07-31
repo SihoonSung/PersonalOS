@@ -123,6 +123,7 @@ struct TodoView: View {
                             .foregroundStyle(.secondary)
                             .badge(completed.count)
                     }
+                    .listRowBackground(Rectangle().fill(.ultraThinMaterial))
                 }
             }
         }
@@ -131,6 +132,7 @@ struct TodoView: View {
         #else
         .listStyle(.insetGrouped)
         #endif
+        .scrollContentBackground(.hidden)
     }
 
     // MARK: Row
@@ -147,11 +149,11 @@ struct TodoView: View {
             .buttonStyle(.borderless)
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    if let mark = priorityMark(item.priority) {
-                        Text(mark)
-                            .foregroundStyle(.orange)
-                            .fontWeight(.semibold)
+                HStack(spacing: 6) {
+                    if let color = priorityColor(item.priority) {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 7, height: 7)
                     }
                     Text(item.entry.title.isEmpty ? "(제목 없음)" : item.entry.title)
                         .strikethrough(item.done)
@@ -176,13 +178,14 @@ struct TodoView: View {
             Button("편집") { editingEntry = item.entry }
             Button("삭제", role: .destructive) { delete(item.entry) }
         }
+        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
     }
 
-    private func priorityMark(_ priority: String?) -> String? {
+    private func priorityColor(_ priority: String?) -> Color? {
         switch priority {
-        case "높음": return "!!!"
-        case "보통": return nil
-        case "낮음": return nil
+        case "높음": return Theme.priorityHigh
+        case "보통": return Theme.priorityMedium
+        case "낮음": return Theme.priorityLow
         default: return nil
         }
     }
