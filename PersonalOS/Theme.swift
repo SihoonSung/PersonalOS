@@ -1,21 +1,33 @@
 import SwiftUI
 
 enum Theme {
-    // MARK: - Colors
+    // MARK: - Colors (cross-platform: iOS/visionOS use UIKit, macOS uses AppKit)
     static let accent = Color("AccentColor")
-    static let background = Color(.systemBackground)
-    static let secondaryBackground = Color(.secondarySystemBackground)
-    static let groupedBackground = Color(.systemGroupedBackground)
 
-    static let expenseRed = Color(.systemRed)
+    #if os(macOS)
+    static let background = Color(nsColor: .windowBackgroundColor)
+    static let secondaryBackground = Color(nsColor: .controlBackgroundColor)
+    static let groupedBackground = Color(nsColor: .windowBackgroundColor)
+    static let neutralGray = Color(nsColor: .secondaryLabelColor)
+    static let expenseRed = Color(nsColor: .systemRed)
+    static let negativeRed = Color(nsColor: .systemRed)
+    static let priorityHigh = Color(nsColor: .systemRed)
+    static let priorityMedium = Color(nsColor: .systemOrange)
+    static let priorityLow = Color(nsColor: .systemBlue)
+    #else
+    static let background = Color(uiColor: .systemBackground)
+    static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
+    static let groupedBackground = Color(uiColor: .systemGroupedBackground)
+    static let neutralGray = Color(uiColor: .secondaryLabel)
+    static let expenseRed = Color(uiColor: .systemRed)
+    static let negativeRed = Color(uiColor: .systemRed)
+    static let priorityHigh = Color(uiColor: .systemRed)
+    static let priorityMedium = Color(uiColor: .systemOrange)
+    static let priorityLow = Color(uiColor: .systemBlue)
+    #endif
+
     static let incomeGreen = Color(red: 0.2, green: 0.78, blue: 0.35)
     static let positiveGreen = Color(red: 0.2, green: 0.78, blue: 0.35)
-    static let negativeRed = Color(.systemRed)
-    static let neutralGray = Color(.secondaryLabel)
-
-    static let priorityHigh = Color(.systemRed)
-    static let priorityMedium = Color(.systemOrange)
-    static let priorityLow = Color(.systemBlue)
 
     // MARK: - Typography
     static func largeTitle() -> Font { .largeTitle.bold() }
