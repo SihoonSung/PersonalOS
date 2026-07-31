@@ -75,8 +75,16 @@ struct DatabaseListView: View {
         .navigationTitle("데이터베이스")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingNewDatabase = true
+                Menu {
+                    Button {
+                        showingNewDatabase = true
+                    } label: {
+                        Label("빈 데이터베이스", systemImage: "square.dashed")
+                    }
+                    Section("템플릿 (Notion 연동용)") {
+                        Button("📏 신체 기록") { createFromTemplate(Templates.makeBodyLog) }
+                        Button("📒 표현 노트") { createFromTemplate(Templates.makeExpressions) }
+                    }
                 } label: {
                     Label("새 데이터베이스", systemImage: "plus")
                 }
@@ -99,6 +107,14 @@ struct DatabaseListView: View {
         context.insert(db)
         try? context.save()
         newDatabaseName = ""
+        openDatabase(db)
+    }
+
+    private func createFromTemplate(_ make: (Int) -> POSDatabase) {
+        let nextIndex = (databases.map(\.sortIndex).max() ?? -1) + 1
+        let db = make(nextIndex)
+        context.insert(db)
+        try? context.save()
         openDatabase(db)
     }
 

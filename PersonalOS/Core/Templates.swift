@@ -9,6 +9,8 @@ import SwiftData
 enum TemplateKey {
     static let budget = "budget"
     static let todo = "todo"
+    static let bodyLog = "bodylog"
+    static let expressions = "expressions"
 }
 
 enum Templates {
@@ -60,6 +62,37 @@ enum Templates {
             POSProperty(name: "마감", type: .date, sortIndex: 1, config: due),
             POSProperty(name: "우선순위", type: .select, sortIndex: 2, config: priority),
             POSProperty(name: "메모", type: .text, sortIndex: 3),
+        ]
+        return db
+    }
+
+    /// Notion "📏 신체 기록"과 속성명 1:1 — 연결 시 그대로 매핑.
+    static func makeBodyLog(sortIndex: Int) -> POSDatabase {
+        let db = POSDatabase(name: "신체 기록", icon: "📏", sortIndex: sortIndex, templateKey: TemplateKey.bodyLog)
+        db.properties = [
+            POSProperty(name: "날짜", type: .date, sortIndex: 0),
+            POSProperty(name: "체중 (lb)", type: .number, sortIndex: 1),
+            POSProperty(name: "체지방률 (%)", type: .number, sortIndex: 2),
+            POSProperty(name: "메모", type: .text, sortIndex: 3),
+        ]
+        return db
+    }
+
+    /// Notion "📒 표현 노트"와 속성명 1:1 — 연결 시 그대로 매핑.
+    static func makeExpressions(sortIndex: Int) -> POSDatabase {
+        var level = PropertyConfig.empty
+        level.selectOptions = ["🌱 새로움", "🔁 복습 중", "✅ 체득"]
+
+        var source = PropertyConfig.empty
+        source.selectOptions = ["일기 교정", "오늘의 표현", "직접 추가"]
+
+        let db = POSDatabase(name: "표현 노트", icon: "📒", sortIndex: sortIndex, templateKey: TemplateKey.expressions)
+        db.properties = [
+            POSProperty(name: "뜻/뉘앙스", type: .text, sortIndex: 0),
+            POSProperty(name: "예문", type: .text, sortIndex: 1),
+            POSProperty(name: "숙련도", type: .select, sortIndex: 2, config: level),
+            POSProperty(name: "출처", type: .select, sortIndex: 3, config: source),
+            POSProperty(name: "추가일", type: .date, sortIndex: 4),
         ]
         return db
     }

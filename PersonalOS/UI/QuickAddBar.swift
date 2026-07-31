@@ -66,6 +66,8 @@ struct QuickAddBar: View {
         switch database.templateKey {
         case TemplateKey.budget: return "예: 어제 스타벅스 5천원"
         case TemplateKey.todo: return "예: 내일 3시 회의 준비"
+        case TemplateKey.bodyLog: return "예: 체중 172.4 체지방 18.2"
+        case TemplateKey.expressions: return "예: hit the ground running"
         default: return "자연어로 입력..."
         }
     }
