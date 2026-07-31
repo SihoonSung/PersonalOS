@@ -2,11 +2,11 @@ import SwiftUI
 import SwiftData
 import Charts
 
-// MARK: - Budget dashboard
+// MARK: - Budget analytics dashboard
 //
-// Month-scoped dashboard: total + vs-last-month, 6-month trend bar chart,
-// category donut with legend, then entries grouped by day. Searching
-// switches to a flat result list across all months.
+// 월 단위 분석: 히어로 요약(지난달 같은 기간 대비·일평균·월말 예상),
+// 월 예산 진행률, 일별/6개월 추이 차트, 카테고리 분해(바), 인사이트 타일,
+// 일자별 내역. 검색 시 전체 월 플랫 리스트.
 
 struct BudgetView: View {
     @Environment(\.modelContext) private var context
@@ -15,6 +15,9 @@ struct BudgetView: View {
     @Binding var editingEntry: POSEntry?
 
     @State private var monthAnchor: Date = .now
+    @AppStorage("monthlyBudget") private var monthlyBudget: Double = 0
+    @State private var showingBudgetEditor = false
+    @State private var budgetInput = ""
 
     private var calendar: Calendar { .current }
 
@@ -48,12 +51,51 @@ struct BudgetView: View {
 
     private var monthTotal: Double { monthItems.map(\.amount).reduce(0, +) }
 
-    private var previousMonthTotal: Double {
+    // MARK: Period analytics
+
+    private var isCurrentMonth: Bool {
+        calendar.isDate(monthAnchor, equalTo: .now, toGranularity: .month)
+    }
+
+    private var daysInMonth: Int {
+        calendar.range(of: .day, in: .month, for: monthAnchor)?.count ?? 30
+    }
+
+    /// 경과 일수 — 이번 달이면 오늘까지, 과거 달이면 전체.
+    private var daysElapsed: Int {
+        isCurrentMonth ? calendar.component(.day, from: .now) : daysInMonth
+    }
+
+    private var dailyAverage: Double {
+        daysElapsed > 0 ? monthTotal / Double(daysElapsed) : 0
+    }
+
+    /// 현재 페이스 기준 월말 예상 지출 (이번 달만).
+    private var projectedTotal: Double? {
+        guard isCurrentMonth, daysElapsed >= 3, monthTotal > 0 else { return nil }
+        return dailyAverage * Double(daysInMonth)
+    }
+
+    /// 지난달 "같은 기간"(1일~경과일) 지출 — 공정한 비교.
+    private var previousSamePeriodTotal: Double {
         guard let prev = calendar.date(byAdding: .month, value: -1, to: monthAnchor) else { return 0 }
-        return allItems
-            .filter { calendar.isDate($0.date, equalTo: prev, toGranularity: .month) }
-            .map(\.amount)
-            .reduce(0, +)
+        return allItems.filter {
+            calendar.isDate($0.date, equalTo: prev, toGranularity: .month)
+                && calendar.component(.day, from: $0.date) <= daysElapsed
+        }.map(\.amount).reduce(0, +)
+    }
+
+    private var deltaPercent: Double? {
+        guard previousSamePeriodTotal > 0 else { return nil }
+        return (monthTotal - previousSamePeriodTotal) / previousSamePeriodTotal * 100
+    }
+
+    // MARK: Chart data
+
+    private var dailyTotals: [(day: Date, total: Double)] {
+        Dictionary(grouping: monthItems) { calendar.startOfDay(for: $0.date) }
+            .map { ($0.key, $0.value.map(\.amount).reduce(0, +)) }
+            .sorted { $0.0 < $1.0 }
     }
 
     private var trend: [(month: Date, total: Double)] {
@@ -67,10 +109,29 @@ struct BudgetView: View {
         }
     }
 
+    private var trendAverage: Double {
+        let nonZero = trend.filter { $0.total > 0 }
+        guard !nonZero.isEmpty else { return 0 }
+        return nonZero.map(\.total).reduce(0, +) / Double(nonZero.count)
+    }
+
     private var categoryTotals: [(name: String, total: Double)] {
         Dictionary(grouping: monthItems, by: \.category)
             .map { ($0.key, $0.value.map(\.amount).reduce(0, +)) }
             .sorted { $0.1 > $1.1 }
+    }
+
+    // MARK: Insights
+
+    private var topMerchant: (name: String, total: Double)? {
+        let named = monthItems.filter { !$0.entry.title.isEmpty }
+        return Dictionary(grouping: named) { $0.entry.title }
+            .map { ($0.key, $0.value.map(\.amount).reduce(0, +)) }
+            .max { $0.1 < $1.1 }
+    }
+
+    private var biggestExpense: Item? {
+        monthItems.max { $0.amount < $1.amount }
     }
 
     private var dayGroups: [(day: Date, items: [Item], total: Double)] {
@@ -88,13 +149,33 @@ struct BudgetView: View {
         return palette[index % palette.count]
     }
 
+    private func fmt(_ value: Double) -> String { database.formattedAmount(value) }
+
     // MARK: Body
 
     var body: some View {
-        if searchText.isEmpty {
-            dashboard
-        } else {
-            searchResults
+        Group {
+            if searchText.isEmpty {
+                dashboard
+            } else {
+                searchResults
+            }
+        }
+        .alert("월 예산 설정", isPresented: $showingBudgetEditor) {
+            TextField("예: 3000", text: $budgetInput)
+                #if os(iOS)
+                .keyboardType(.decimalPad)
+                #endif
+            Button("저장") {
+                monthlyBudget = Double(budgetInput.replacingOccurrences(of: ",", with: "")) ?? 0
+                budgetInput = ""
+            }
+            if monthlyBudget > 0 {
+                Button("예산 해제", role: .destructive) { monthlyBudget = 0 }
+            }
+            Button("취소", role: .cancel) { budgetInput = "" }
+        } message: {
+            Text("한 달 지출 목표를 정하면 남은 예산과 사용률을 보여줘요.")
         }
     }
 
@@ -102,16 +183,39 @@ struct BudgetView: View {
         List {
             Section {
                 monthHeader
-                summary
-                if trend.contains(where: { $0.total > 0 }) {
-                    trendChart
-                }
-                if !categoryTotals.isEmpty {
-                    categoryChart
-                    categoryLegend
-                }
+                heroSummary
+                budgetRow
             }
             .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+
+            if dailyTotals.count > 1 {
+                Section {
+                    dailyChart
+                }
+                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+            }
+
+            if trend.contains(where: { $0.total > 0 }) {
+                Section {
+                    trendChart
+                }
+                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+            }
+
+            if !categoryTotals.isEmpty {
+                Section {
+                    categoryChart
+                    categoryBars
+                }
+                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+            }
+
+            if !monthItems.isEmpty {
+                Section {
+                    insightsGrid
+                }
+                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+            }
 
             if dayGroups.isEmpty {
                 Section {
@@ -132,7 +236,7 @@ struct BudgetView: View {
                     HStack {
                         Text(group.day.formatted(.dateTime.month().day().weekday(.wide)))
                         Spacer()
-                        Text(database.formattedAmount(group.total))
+                        Text(fmt(group.total))
                     }
                 }
             }
@@ -146,10 +250,6 @@ struct BudgetView: View {
     }
 
     // MARK: Month navigation
-
-    private var isCurrentMonth: Bool {
-        calendar.isDate(monthAnchor, equalTo: .now, toGranularity: .month)
-    }
 
     private var monthHeader: some View {
         HStack {
@@ -190,60 +290,197 @@ struct BudgetView: View {
         }
     }
 
-    // MARK: Summary
+    // MARK: Hero summary
 
-    private var summary: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("지출 합계")
-                .font(.subheadline)
+    private var heroSummary: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(isCurrentMonth ? "이번 달 지출" : "지출 합계")
+                .font(.caption.bold())
                 .foregroundStyle(.secondary)
-            Text(database.formattedAmount(monthTotal))
-                .font(.system(.largeTitle, design: .rounded).weight(.semibold))
-                .contentTransition(.numericText())
-            comparisonLine
+
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(fmt(monthTotal))
+                    .font(.system(.largeTitle, design: .rounded).weight(.semibold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
+                if let delta = deltaPercent {
+                    deltaChip(delta)
+                }
+            }
+
+            if let delta = deltaPercent {
+                Text(delta >= 0
+                     ? "지난달 같은 기간보다 \(fmt(abs(monthTotal - previousSamePeriodTotal))) 더 썼어요"
+                     : "지난달 같은 기간보다 \(fmt(abs(monthTotal - previousSamePeriodTotal))) 아꼈어요")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("지난달 기록이 없어요")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            HStack(spacing: 0) {
+                statBlock("일평균", fmt(dailyAverage))
+                if let projected = projectedTotal {
+                    statBlock("월말 예상", fmt(projected))
+                }
+                statBlock("거래", "\(monthItems.count)건")
+            }
+            .padding(.top, 2)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
     }
 
+    private func deltaChip(_ delta: Double) -> some View {
+        let up = delta >= 0
+        return HStack(spacing: 3) {
+            Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
+                .font(.caption2.bold())
+            Text("\(abs(delta).formatted(.number.precision(.fractionLength(0))))%")
+                .font(.caption.bold())
+                .monospacedDigit()
+        }
+        .foregroundStyle(up ? Color.red : Color.green)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background((up ? Color.red : Color.green).opacity(0.12), in: Capsule())
+    }
+
+    private func statBlock(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Budget progress
+
     @ViewBuilder
-    private var comparisonLine: some View {
-        if previousMonthTotal > 0 {
-            let diff = monthTotal - previousMonthTotal
-            let percent = abs(diff) / previousMonthTotal * 100
-            HStack(spacing: 4) {
-                Image(systemName: diff > 0 ? "arrow.up.right" : "arrow.down.right")
-                let percentText = percent.formatted(.number.precision(.fractionLength(0)))
-                Text(diff > 0
-                     ? "지난달보다 \(database.formattedAmount(abs(diff))) (\(percentText)%) 늘었어요"
-                     : "지난달보다 \(database.formattedAmount(abs(diff))) (\(percentText)%) 줄었어요")
+    private var budgetRow: some View {
+        if monthlyBudget > 0 {
+            let progress = min(monthTotal / monthlyBudget, 1.0)
+            let over = monthTotal > monthlyBudget
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("예산")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(over
+                         ? "\(fmt(monthTotal - monthlyBudget)) 초과"
+                         : "\(fmt(monthlyBudget - monthTotal)) 남음")
+                        .font(.caption.bold())
+                        .foregroundStyle(over ? .orange : .secondary)
+                        .monospacedDigit()
+                }
+
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.glassTrack)
+                    GeometryReader { geo in
+                        Capsule()
+                            .fill(over ? AnyShapeStyle(Color.orange) : AnyShapeStyle(Theme.glassInk.opacity(0.75)))
+                            .frame(width: geo.size.width * progress)
+                            .animation(.spring(duration: 0.5), value: progress)
+                    }
+                }
+                .frame(height: 5)
+
+                Text("예산 \(fmt(monthlyBudget)) 중 \(Int((monthTotal / monthlyBudget * 100).rounded()))% 사용")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
             }
-            .font(.caption)
-            .foregroundStyle(diff > 0 ? .red : .green)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .onTapGesture { showingBudgetEditor = true }
         } else {
-            Text("지난달 기록이 없어요")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            Button {
+                showingBudgetEditor = true
+            } label: {
+                Label("월 예산 설정", systemImage: "target")
+                    .font(.subheadline)
+            }
+            .buttonStyle(.borderless)
         }
     }
 
     // MARK: Charts
 
+    private var dailyChart: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("일별 지출")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Chart {
+                ForEach(dailyTotals, id: \.day) { point in
+                    BarMark(
+                        x: .value("일", point.day, unit: .day),
+                        y: .value("지출", point.total)
+                    )
+                    .foregroundStyle(Theme.glassInk.opacity(0.6))
+                    .cornerRadius(2)
+                }
+                if dailyAverage > 0 {
+                    RuleMark(y: .value("일평균", dailyAverage))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+                    AxisValueLabel(format: .dateTime.day())
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .trailing) { _ in
+                    AxisGridLine()
+                    AxisValueLabel()
+                }
+            }
+            .frame(height: 110)
+        }
+        .padding(.vertical, 4)
+    }
+
     private var trendChart: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("월별 추이")
-                .font(.subheadline)
+            Text("6개월 추이")
+                .font(.caption.bold())
                 .foregroundStyle(.secondary)
-            Chart(trend, id: \.month) { point in
-                BarMark(
-                    x: .value("월", point.month, unit: .month),
-                    y: .value("지출", point.total)
-                )
-                .foregroundStyle(
-                    calendar.isDate(point.month, equalTo: monthAnchor, toGranularity: .month)
-                        ? AnyShapeStyle(Theme.glassInk.opacity(0.75))
-                        : AnyShapeStyle(Theme.glassInk.opacity(0.25))
-                )
-                .cornerRadius(4)
+            Chart {
+                ForEach(trend, id: \.month) { point in
+                    BarMark(
+                        x: .value("월", point.month, unit: .month),
+                        y: .value("지출", point.total)
+                    )
+                    .foregroundStyle(
+                        calendar.isDate(point.month, equalTo: monthAnchor, toGranularity: .month)
+                            ? AnyShapeStyle(Theme.glassInk.opacity(0.75))
+                            : AnyShapeStyle(Theme.glassInk.opacity(0.25))
+                    )
+                    .cornerRadius(4)
+                }
+                if trendAverage > 0 {
+                    RuleMark(y: .value("평균", trendAverage))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        .foregroundStyle(.secondary)
+                        .annotation(position: .top, alignment: .trailing) {
+                            Text("평균 \(fmt(trendAverage))")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                }
             }
             .chartXAxis {
                 AxisMarks(values: .stride(by: .month)) { _ in
@@ -264,7 +501,7 @@ struct BudgetView: View {
     private var categoryChart: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("카테고리별")
-                .font(.subheadline)
+                .font(.caption.bold())
                 .foregroundStyle(.secondary)
             Chart(categoryTotals, id: \.name) { item in
                 SectorMark(
@@ -284,35 +521,101 @@ struct BudgetView: View {
                             Text("합계")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Text(database.formattedAmount(monthTotal))
+                            Text(fmt(monthTotal))
                                 .font(.headline)
                         }
                         .position(x: frame.midX, y: frame.midY)
                     }
                 }
             }
-            .frame(height: 190)
+            .frame(height: 180)
         }
         .padding(.vertical, 4)
     }
 
-    private var categoryLegend: some View {
+    private var categoryBars: some View {
         ForEach(categoryTotals, id: \.name) { item in
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(categoryColor(item.name))
-                    .frame(width: 9, height: 9)
-                Text(item.name)
-                Spacer()
-                Text(database.formattedAmount(item.total))
-                    .foregroundStyle(.secondary)
-                Text("\((item.total / max(monthTotal, 1) * 100).formatted(.number.precision(.fractionLength(0))))%")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 38, alignment: .trailing)
+            let fraction = monthTotal > 0 ? item.total / monthTotal : 0
+            VStack(spacing: 5) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(categoryColor(item.name))
+                        .frame(width: 8, height: 8)
+                    Text(item.name)
+                        .font(.subheadline)
+                    Spacer()
+                    Text("\((fraction * 100).formatted(.number.precision(.fractionLength(0))))%")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
+                    Text(fmt(item.total))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.glassTrack)
+                    GeometryReader { geo in
+                        Capsule()
+                            .fill(categoryColor(item.name).opacity(0.75))
+                            .frame(width: max(geo.size.width * fraction, 3))
+                    }
+                }
+                .frame(height: 4)
             }
-            .font(.subheadline)
+            .padding(.vertical, 2)
         }
+    }
+
+    // MARK: Insights
+
+    private var insightsGrid: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                insightCell(
+                    "최대 지출",
+                    biggestExpense.map { fmt($0.amount) } ?? "—",
+                    biggestExpense?.entry.title.isEmpty == false ? biggestExpense!.entry.title : nil
+                )
+                insightCell(
+                    "최다 지출처",
+                    topMerchant?.name ?? "—",
+                    topMerchant.map { fmt($0.total) }
+                )
+            }
+            HStack(spacing: 12) {
+                insightCell(
+                    "건당 평균",
+                    monthItems.isEmpty ? "—" : fmt(monthTotal / Double(monthItems.count)),
+                    nil
+                )
+                insightCell(
+                    "최다 카테고리",
+                    categoryTotals.first?.name ?? "—",
+                    categoryTotals.first.map { fmt($0.total) }
+                )
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func insightCell(_ title: String, _ value: String, _ sub: String?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            if let sub {
+                Text(sub)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Rows
@@ -325,7 +628,7 @@ struct BudgetView: View {
                 subtitle(for: item)
             }
             Spacer()
-            Text(database.formattedAmount(item.amount))
+            Text(fmt(item.amount))
                 .font(.body.weight(.medium))
                 .monospacedDigit()
         }
@@ -349,10 +652,15 @@ struct BudgetView: View {
                 .flatMap { item.entry.text(for: $0) } ?? "",
         ].filter { !$0.isEmpty }
         if !parts.isEmpty {
-            Text(parts.joined(separator: " · "))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(categoryColor(item.category))
+                    .frame(width: 6, height: 6)
+                Text(parts.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
     }
 
