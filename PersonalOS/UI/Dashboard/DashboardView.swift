@@ -1,11 +1,13 @@
 import SwiftUI
 import SwiftData
 
-/// Liquid Glass 홈 대시보드 — 오늘 할 일 메인, 예산/오늘 지출 반폭 2열.
-/// 템플릿 키(todo/budget)로 대상 데이터베이스를 찾으므로 이름을 바꿔도 동작.
+/// Liquid Glass 홈 대시보드 — 앱의 루트 화면.
+/// 좌상단: 데이터베이스 목록, 우상단: 설정. 카드 chevron으로 개별 DB 이동.
 struct DashboardView: View {
     @Query(sort: \POSDatabase.sortIndex) private var databases: [POSDatabase]
     var openDatabase: (POSDatabase) -> Void = { _ in }
+    var onOpenDatabases: () -> Void = {}
+    var onOpenSettings: () -> Void = {}
 
     private var todoDatabase: POSDatabase? {
         databases.first { $0.templateKey == TemplateKey.todo }
@@ -31,44 +33,55 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        ZStack {
-            DashboardBackground()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.spacingM) {
-                        VStack(alignment: .leading, spacing: Theme.spacingXS) {
-                            Text(dateString)
-                                .font(Theme.caption().bold())
-                                .foregroundStyle(.secondary)
-                            Text(greeting)
-                                .font(Theme.largeTitle())
-                        }
-                        .padding(.top, Theme.spacingS)
-
-                        if let todo = todoDatabase {
-                            TodayFocusCard(database: todo, onOpen: { openDatabase(todo) })
-                        }
-
-                        if let budget = budgetDatabase {
-                            HStack(alignment: .top, spacing: Theme.spacingM) {
-                                BudgetSummaryCard(database: budget, onOpen: { openDatabase(budget) })
-                                TodaySpendCard(database: budget)
-                            }
-                        }
-
-                    Spacer(minLength: 110)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.spacingM) {
+                VStack(alignment: .leading, spacing: Theme.spacingXS) {
+                    Text(dateString)
+                        .font(Theme.caption().bold())
+                        .foregroundStyle(.secondary)
+                    Text(greeting)
+                        .font(Theme.largeTitle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, Theme.spacingM)
-                .padding(.vertical, Theme.spacingM)
+                .padding(.top, Theme.spacingS)
+
+                if let todo = todoDatabase {
+                    TodayFocusCard(database: todo, onOpen: { openDatabase(todo) })
+                }
+
+                if let budget = budgetDatabase {
+                    HStack(alignment: .top, spacing: Theme.spacingM) {
+                        BudgetSummaryCard(database: budget, onOpen: { openDatabase(budget) })
+                        TodaySpendCard(database: budget)
+                    }
+                }
+
+                Spacer(minLength: 110)
             }
-            .scrollIndicators(.hidden)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Theme.spacingM)
+            .padding(.vertical, Theme.spacingM)
         }
+        .scrollIndicators(.hidden)
+        // 배경은 .background로: 블롭 Circle(460pt)이 화면보다 넓어도
+        // 레이아웃 폭에 영향을 주지 않는다 (ZStack sibling이면 전체가 벌어짐)
+        .background(DashboardBackground())
         .overlay(alignment: .bottom) {
             if let todo = todoDatabase {
                 QuickAddBar(database: todo, style: .glass)
                     .padding(.horizontal, Theme.spacingM)
                     .padding(.bottom, Theme.spacingM)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: onOpenDatabases) {
+                    Label("데이터베이스", systemImage: "square.grid.2x2")
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: onOpenSettings) {
+                    Label("설정", systemImage: "gearshape")
+                }
             }
         }
     }

@@ -1,33 +1,82 @@
 import SwiftUI
 import SwiftData
 
-/// Sidebar selection: 홈 대시보드 or a user database.
-enum SidebarSelection: Hashable {
-    case home
+/// Navigation routes from the dashboard root.
+enum Route: Hashable {
+    case databases
     case database(POSDatabase)
+    case settings
 }
 
-/// Root navigation: sidebar (홈 + databases) + detail.
-/// NavigationSplitView collapses to a stack on iPhone automatically.
+/// Root: 대시보드가 메인 화면. 좌상단 → 데이터베이스 목록, 우상단 → 설정.
 struct RootView: View {
+    @State private var path: [Route] = []
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            DashboardView(
+                openDatabase: { path.append(.database($0)) },
+                onOpenDatabases: { path.append(.databases) },
+                onOpenSettings: { path.append(.settings) }
+            )
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .databases:
+                    DatabaseListView(openDatabase: { path.append(.database($0)) })
+                case .database(let db):
+                    DatabaseView(database: db)
+                        .id(db.uuid)
+                case .settings:
+                    SettingsView()
+                }
+            }
+        }
+    }
+}
+
+/// 데이터베이스 목록 (구 사이드바) — 생성/삭제 지원.
+struct DatabaseListView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \POSDatabase.sortIndex) private var databases: [POSDatabase]
+    var openDatabase: (POSDatabase) -> Void
 
-    @State private var selection: SidebarSelection? = .home
-    @State private var preferredColumn: NavigationSplitViewColumn = .detail
     @State private var showingNewDatabase = false
     @State private var newDatabaseName = ""
 
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: $preferredColumn) {
-            sidebar
-        } detail: {
-            switch selection {
-            case .database(let db):
-                DatabaseView(database: db)
-                    .id(db.uuid)
-            default:
-                DashboardView(openDatabase: { selection = .database($0) })
+        List {
+            Section("데이터베이스") {
+                ForEach(databases) { db in
+                    Button {
+                        openDatabase(db)
+                    } label: {
+                        HStack {
+                            Label {
+                                Text(db.name)
+                                    .foregroundStyle(.primary)
+                            } icon: {
+                                Text(db.icon)
+                            }
+                            Spacer()
+                            Text("\(db.entryCount)")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                    .contextMenu {
+                        Button("삭제", role: .destructive) { delete(db) }
+                    }
+                }
+            }
+        }
+        .navigationTitle("데이터베이스")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showingNewDatabase = true
+                } label: {
+                    Label("새 데이터베이스", systemImage: "plus")
+                }
             }
         }
         .alert("새 데이터베이스", isPresented: $showingNewDatabase) {
@@ -39,47 +88,6 @@ struct RootView: View {
         }
     }
 
-    private var sidebar: some View {
-        List(selection: $selection) {
-            Label(L.tabHome, systemImage: "house")
-                .tag(SidebarSelection.home)
-
-            Section("데이터베이스") {
-                ForEach(databases) { db in
-                    Label {
-                        Text(db.name)
-                    } icon: {
-                        Text(db.icon)
-                    }
-                    .badge(db.entryCount)
-                    .tag(SidebarSelection.database(db))
-                    .contextMenu {
-                        Button("삭제", role: .destructive) { delete(db) }
-                    }
-                }
-            }
-        }
-        .navigationTitle("PersonalOS")
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    showingNewDatabase = true
-                } label: {
-                    Label("새 데이터베이스", systemImage: "plus")
-                }
-            }
-            #if os(iOS)
-            ToolbarItem(placement: .topBarLeading) {
-                NavigationLink {
-                    SettingsView()
-                } label: {
-                    Label("설정", systemImage: "gearshape")
-                }
-            }
-            #endif
-        }
-    }
-
     private func createDatabase() {
         let name = newDatabaseName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
@@ -88,13 +96,10 @@ struct RootView: View {
         context.insert(db)
         try? context.save()
         newDatabaseName = ""
-        selection = .database(db)
+        openDatabase(db)
     }
 
     private func delete(_ db: POSDatabase) {
-        if case .database(let selected) = selection, selected.uuid == db.uuid {
-            selection = .home
-        }
         context.delete(db)
         try? context.save()
     }
