@@ -160,10 +160,6 @@ struct L {
     static var priorityMedium: String { s("보통", "Medium") }
     static var priorityHigh:   String { s("높음", "High") }
 
-    static func priorityLabel(_ p: Int) -> String {
-        Priority(rawValue: p)?.label ?? ""
-    }
-
     // MARK: - Repeat Rules
     static var repeatNone:    String { s("없음", "None") }
     static var repeatDaily:   String { s("매일", "Daily") }
