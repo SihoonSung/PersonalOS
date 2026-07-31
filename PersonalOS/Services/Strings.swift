@@ -45,6 +45,8 @@ struct L {
     static func dashBudgetUsed(_ pct: Int) -> String { s("\(pct)% 사용", "\(pct)% used") }
     static func dashBudgetOver(_ amount: String) -> String { s("\(amount) 초과", "\(amount) over") }
     static var dashTodaySpent:  String { s("오늘 지출", "Spent today") }
+    static var dashMonthSpent:  String { s("이번 달 지출", "Spent this month") }
+    static func dashWeekSpent(_ amount: String) -> String { s("이번 주 \(amount)", "This week \(amount)") }
     static var overdueBadge:      String { s("연체", "Overdue") }
 
     // MARK: - Task Summary Card

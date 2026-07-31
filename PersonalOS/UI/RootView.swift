@@ -14,11 +14,12 @@ struct RootView: View {
     @Query(sort: \POSDatabase.sortIndex) private var databases: [POSDatabase]
 
     @State private var selection: SidebarSelection? = .home
+    @State private var preferredColumn: NavigationSplitViewColumn = .detail
     @State private var showingNewDatabase = false
     @State private var newDatabaseName = ""
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(preferredCompactColumn: $preferredColumn) {
             sidebar
         } detail: {
             switch selection {

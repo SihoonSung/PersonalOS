@@ -79,7 +79,7 @@ struct BudgetSummaryCard: View {
                 }
                 .frame(height: 5)
             } else {
-                Text("이번 달 지출")
+                Text(L.dashMonthSpent)
                     .font(Theme.caption2())
                     .foregroundStyle(.secondary)
             }
@@ -138,7 +138,7 @@ struct TodaySpendCard: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
-            Text("이번 주 \(database.formattedAmount(week))")
+            Text(L.dashWeekSpent(database.formattedAmount(week)))
                 .font(Theme.caption2())
                 .foregroundStyle(.secondary)
                 .monospacedDigit()

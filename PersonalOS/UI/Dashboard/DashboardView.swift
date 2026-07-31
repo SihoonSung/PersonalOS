@@ -35,8 +35,7 @@ struct DashboardView: View {
             DashboardBackground()
 
             ScrollView {
-                GlassEffectContainer(spacing: 24) {
-                    VStack(alignment: .leading, spacing: Theme.spacingM) {
+                VStack(alignment: .leading, spacing: Theme.spacingM) {
                         VStack(alignment: .leading, spacing: Theme.spacingXS) {
                             Text(dateString)
                                 .font(Theme.caption().bold())
@@ -57,11 +56,11 @@ struct DashboardView: View {
                             }
                         }
 
-                        Spacer(minLength: 110)
-                    }
-                    .padding(.horizontal, Theme.spacingM)
-                    .padding(.vertical, Theme.spacingM)
+                    Spacer(minLength: 110)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Theme.spacingM)
+                .padding(.vertical, Theme.spacingM)
             }
             .scrollIndicators(.hidden)
         }
