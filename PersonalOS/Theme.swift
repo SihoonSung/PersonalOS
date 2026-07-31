@@ -72,19 +72,3 @@ extension Theme {
     static let glassInk = Color.primary
     static let glassTrack = Color.primary.opacity(0.08)
 }
-
-// MARK: - Amount Formatting
-
-extension Double {
-    func formattedKRW() -> String {
-        Currency.krw.format(self)
-    }
-
-    func formattedUSD() -> String {
-        Currency.usd.format(self)
-    }
-
-    func formattedAmount(currency: String = "KRW") -> String {
-        currency == "USD" ? formattedUSD() : formattedKRW()
-    }
-}
