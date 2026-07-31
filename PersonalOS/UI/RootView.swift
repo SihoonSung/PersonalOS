@@ -1,13 +1,19 @@
 import SwiftUI
 import SwiftData
 
-/// Root navigation: sidebar (databases) + detail (selected database).
+/// Sidebar selection: 홈 대시보드 or a user database.
+enum SidebarSelection: Hashable {
+    case home
+    case database(POSDatabase)
+}
+
+/// Root navigation: sidebar (홈 + databases) + detail.
 /// NavigationSplitView collapses to a stack on iPhone automatically.
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \POSDatabase.sortIndex) private var databases: [POSDatabase]
 
-    @State private var selection: POSDatabase?
+    @State private var selection: SidebarSelection? = .home
     @State private var showingNewDatabase = false
     @State private var newDatabaseName = ""
 
@@ -15,15 +21,12 @@ struct RootView: View {
         NavigationSplitView {
             sidebar
         } detail: {
-            if let selection {
-                DatabaseView(database: selection)
-                    .id(selection.uuid)
-            } else {
-                ContentUnavailableView(
-                    "데이터베이스를 선택하세요",
-                    systemImage: "square.grid.2x2",
-                    description: Text("왼쪽에서 선택하거나 새로 만들 수 있어요.")
-                )
+            switch selection {
+            case .database(let db):
+                DatabaseView(database: db)
+                    .id(db.uuid)
+            default:
+                DashboardView(openDatabase: { selection = .database($0) })
             }
         }
         .alert("새 데이터베이스", isPresented: $showingNewDatabase) {
@@ -37,6 +40,9 @@ struct RootView: View {
 
     private var sidebar: some View {
         List(selection: $selection) {
+            Label(L.tabHome, systemImage: "house")
+                .tag(SidebarSelection.home)
+
             Section("데이터베이스") {
                 ForEach(databases) { db in
                     Label {
@@ -45,7 +51,7 @@ struct RootView: View {
                         Text(db.icon)
                     }
                     .badge(db.entryCount)
-                    .tag(db)
+                    .tag(SidebarSelection.database(db))
                     .contextMenu {
                         Button("삭제", role: .destructive) { delete(db) }
                     }
@@ -81,11 +87,13 @@ struct RootView: View {
         context.insert(db)
         try? context.save()
         newDatabaseName = ""
-        selection = db
+        selection = .database(db)
     }
 
     private func delete(_ db: POSDatabase) {
-        if selection?.uuid == db.uuid { selection = nil }
+        if case .database(let selected) = selection, selected.uuid == db.uuid {
+            selection = .home
+        }
         context.delete(db)
         try? context.save()
     }

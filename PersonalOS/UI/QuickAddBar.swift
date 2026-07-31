@@ -4,8 +4,12 @@ import SwiftData
 /// Natural-language quick add. Parsing always completes before saving
 /// (no race between debounce and save — lesson from the previous app).
 struct QuickAddBar: View {
+    /// bar: 리스트 하단 고정 바 (DatabaseView) · glass: 떠 있는 글래스 캡슐 (대시보드)
+    enum Style { case bar, glass }
+
     @Environment(\.modelContext) private var context
     let database: POSDatabase
+    var style: Style = .bar
 
     @State private var text = ""
     @State private var isSaving = false
@@ -13,6 +17,22 @@ struct QuickAddBar: View {
     @FocusState private var focused: Bool
 
     var body: some View {
+        switch style {
+        case .bar:
+            inputRow
+                .background(.quaternary.opacity(0.5), in: Capsule())
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(.bar)
+        case .glass:
+            inputRow
+                .padding(.horizontal, 6)
+                .padding(.vertical, 6)
+                .glassEffect(.regular.interactive(), in: .capsule)
+        }
+    }
+
+    private var inputRow: some View {
         HStack(spacing: 6) {
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
@@ -40,10 +60,6 @@ struct QuickAddBar: View {
                 .padding(.trailing, 3)
             }
         }
-        .background(.quaternary.opacity(0.5), in: Capsule())
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.bar)
     }
 
     private var placeholder: String {
