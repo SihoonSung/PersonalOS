@@ -236,6 +236,18 @@ enum MCPTools {
                     }
                     entry.setText(s.isEmpty ? nil : s, for: property, context: context)
                 }
+            case .multiSelect:
+                var list: [String] = []
+                if let arr = raw as? [Any] {
+                    list = arr.compactMap { $0 as? String }
+                } else if let s = raw as? String, !s.isEmpty {
+                    list = s.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                }
+                let invalid = list.filter { !property.config.selectOptions.contains($0) }
+                guard invalid.isEmpty else {
+                    throw ToolError(message: "\"\(property.name)\" 옵션이 아닙니다: \(invalid.joined(separator: ", ")). 가능: \(property.config.selectOptions.joined(separator: ", "))")
+                }
+                entry.setTextList(list, for: property, context: context)
             case .number:
                 if let n = raw as? Double { entry.setNumber(n, for: property, context: context) }
                 else if let n = raw as? Int { entry.setNumber(Double(n), for: property, context: context) }

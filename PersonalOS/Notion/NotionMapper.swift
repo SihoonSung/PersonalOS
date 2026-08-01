@@ -46,6 +46,7 @@ enum NotionMapper {
         case .date: return ["date"]
         case .checkbox: return ["checkbox"]
         case .select: return ["select", "status"]
+        case .multiSelect: return ["multi_select"]
         case .url: return ["url"]
         }
     }
@@ -58,6 +59,7 @@ enum NotionMapper {
         case "date": return .date
         case "checkbox": return .checkbox
         case "select", "status": return .select
+        case "multi_select": return .multiSelect
         case "url": return .url
         default: return nil
         }
@@ -72,6 +74,7 @@ enum NotionMapper {
         case "checkbox": return "체크박스"
         case "select": return "선택"
         case "status": return "상태"
+        case "multi_select": return "다중 선택"
         case "url": return "URL"
         default: return type
         }
@@ -159,7 +162,7 @@ enum NotionMapper {
     private static func refreshConfig(of property: POSProperty, from def: [String: Any], notionType: String) {
         var config = property.config
         switch notionType {
-        case "select", "status":
+        case "select", "status", "multi_select":
             let container = def[notionType] as? [String: Any]
             let options = (container?["options"] as? [[String: Any]])?
                 .compactMap { $0["name"] as? String } ?? []
@@ -283,6 +286,10 @@ enum NotionMapper {
             // sync error rather than silently dropped).
             return [link.notionType: ["name": name]]
 
+        case .multiSelect:
+            let list = entry.textList(for: property)
+            return ["multi_select": list.map { ["name": $0] }]
+
         case .url:
             if let url = entry.text(for: property), !url.isEmpty {
                 return ["url": url]
@@ -340,6 +347,17 @@ enum NotionMapper {
                 if let option, !option.isEmpty, !property.config.selectOptions.contains(option) {
                     var config = property.config
                     config.selectOptions.append(option)
+                    property.config = config
+                }
+
+            case .multiSelect:
+                let options = (raw["multi_select"] as? [[String: Any]])?
+                    .compactMap { $0["name"] as? String } ?? []
+                entry.setTextList(options, for: property, context: context)
+                let unknown = options.filter { !property.config.selectOptions.contains($0) }
+                if !unknown.isEmpty {
+                    var config = property.config
+                    config.selectOptions.append(contentsOf: unknown)
                     property.config = config
                 }
 

@@ -212,6 +212,7 @@ struct TodoView: View {
             try? context.save()
         }
         NotionSyncService.shared.scheduleAutoSync()
+        WidgetDataWriter.refresh(context: context)
     }
 
     private func delete(_ entry: POSEntry) {

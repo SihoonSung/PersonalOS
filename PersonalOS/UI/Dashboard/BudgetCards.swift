@@ -12,6 +12,8 @@ struct BudgetSummaryCard: View {
     var onOpen: () -> Void = {}
 
     @AppStorage("monthlyBudget") private var monthlyBudget: Double = 0
+    @State private var showingBudgetEditor = false
+    @State private var budgetInput = ""
 
     private var calendar: Calendar { .current }
 
@@ -82,10 +84,41 @@ struct BudgetSummaryCard: View {
                 Text(L.dashMonthSpent)
                     .font(Theme.caption2())
                     .foregroundStyle(.secondary)
+
+                Button {
+                    showingBudgetEditor = true
+                } label: {
+                    Text("예산 설정하기")
+                        .font(Theme.caption2().bold())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Theme.glassTrack, in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCardStyle()
+        .onTapGesture {
+            if monthlyBudget <= 0 { showingBudgetEditor = true }
+        }
+        .alert("월 예산 설정", isPresented: $showingBudgetEditor) {
+            TextField("예: 3000", text: $budgetInput)
+                #if os(iOS)
+                .keyboardType(.decimalPad)
+                #endif
+            Button("저장") {
+                monthlyBudget = Double(budgetInput.replacingOccurrences(of: ",", with: "")) ?? 0
+                budgetInput = ""
+            }
+            if monthlyBudget > 0 {
+                Button("예산 해제", role: .destructive) { monthlyBudget = 0 }
+            }
+            Button("취소", role: .cancel) { budgetInput = "" }
+        } message: {
+            Text("한 달 지출 목표를 정하면 남은 예산과 사용률을 보여줘요.")
+        }
     }
 }
 

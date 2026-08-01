@@ -119,6 +119,41 @@ struct PropertyFieldView: View {
                 }
             }
 
+        case .multiSelect:
+            let selected = entry.textList(for: property)
+            DisclosureGroup {
+                ForEach(property.config.selectOptions, id: \.self) { option in
+                    Button {
+                        var list = entry.textList(for: property)
+                        if let i = list.firstIndex(of: option) {
+                            list.remove(at: i)
+                        } else {
+                            list.append(option)
+                        }
+                        entry.setTextList(list, for: property, context: context)
+                    } label: {
+                        HStack {
+                            Text(option)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if selected.contains(option) {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } label: {
+                HStack {
+                    Text(property.name)
+                    Spacer()
+                    Text(selected.isEmpty ? "없음" : selected.joined(separator: ", "))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
         case .select:
             Picker(property.name, selection: selectBinding) {
                 Text("없음").tag("")

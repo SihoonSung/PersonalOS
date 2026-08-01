@@ -95,6 +95,7 @@ final class AIService: ObservableObject {
         case .date: return "날짜"
         case .checkbox: return "체크박스"
         case .select: return "선택"
+        case .multiSelect: return "다중 선택 (배열로 출력)"
         case .url: return "URL"
         }
     }
@@ -128,6 +129,18 @@ final class AIService: ObservableObject {
                 if let s = rawValue as? String,
                    property.config.selectOptions.contains(s) {
                     result.texts[property.name] = s
+                }
+            case .multiSelect:
+                var list: [String] = []
+                if let arr = rawValue as? [Any] {
+                    list = arr.compactMap { $0 as? String }
+                } else if let s = rawValue as? String {
+                    list = s.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                }
+                list = list.filter { property.config.selectOptions.contains($0) }
+                if !list.isEmpty,
+                   let json = (try? JSONEncoder().encode(list)).flatMap({ String(data: $0, encoding: .utf8) }) {
+                    result.texts[property.name] = json
                 }
             case .number:
                 if let n = numeric(rawValue) { result.numbers[property.name] = n }

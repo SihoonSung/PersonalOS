@@ -22,6 +22,7 @@ enum PropertyType: String, Codable, CaseIterable, Identifiable {
     case date
     case checkbox
     case select
+    case multiSelect = "multiselect"
     case url
 
     var id: String { rawValue }
@@ -33,6 +34,7 @@ enum PropertyType: String, Codable, CaseIterable, Identifiable {
         case .date: return "날짜"
         case .checkbox: return "체크박스"
         case .select: return "선택"
+        case .multiSelect: return "다중 선택"
         case .url: return "URL"
         }
     }
@@ -44,6 +46,7 @@ enum PropertyType: String, Codable, CaseIterable, Identifiable {
         case .date: return "calendar"
         case .checkbox: return "checkmark.square"
         case .select: return "tag"
+        case .multiSelect: return "checklist"
         case .url: return "link"
         }
     }

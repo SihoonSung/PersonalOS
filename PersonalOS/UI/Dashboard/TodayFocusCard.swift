@@ -165,5 +165,6 @@ struct TodayFocusCard: View {
             try? context.save()
         }
         NotionSyncService.shared.scheduleAutoSync()
+        WidgetDataWriter.refresh(context: context)
     }
 }

@@ -68,6 +68,7 @@ struct QuickAddBar: View {
         case TemplateKey.todo: return "예: 내일 3시 회의 준비"
         case TemplateKey.bodyLog: return "예: 체중 172.4 체지방 18.2"
         case TemplateKey.expressions: return "예: hit the ground running"
+        case TemplateKey.workout: return "예: 가슴 어깨 · 벤치 135x5x5"
         default: return "자연어로 입력..."
         }
     }
@@ -109,5 +110,6 @@ struct QuickAddBar: View {
         }
         try? context.save()
         NotionSyncService.shared.scheduleAutoSync()
+        WidgetDataWriter.refresh(context: context)
     }
 }

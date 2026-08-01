@@ -11,6 +11,7 @@ enum TemplateKey {
     static let todo = "todo"
     static let bodyLog = "bodylog"
     static let expressions = "expressions"
+    static let workout = "workout"
 }
 
 enum Templates {
@@ -93,6 +94,25 @@ enum Templates {
             POSProperty(name: "숙련도", type: .select, sortIndex: 2, config: level),
             POSProperty(name: "출처", type: .select, sortIndex: 3, config: source),
             POSProperty(name: "추가일", type: .date, sortIndex: 4),
+        ]
+        return db
+    }
+
+    /// Notion "🏋️ 운동 기록"과 속성명 1:1 — 부위는 다중 선택.
+    static func makeWorkout(sortIndex: Int) -> POSDatabase {
+        var parts = PropertyConfig.empty
+        parts.selectOptions = ["가슴", "등", "어깨", "하체", "팔", "코어", "심폐"]
+
+        var kind = PropertyConfig.empty
+        kind.selectOptions = ["웨이트", "유산소", "혼합"]
+
+        let db = POSDatabase(name: "운동 기록", icon: "🏋️", sortIndex: sortIndex, templateKey: TemplateKey.workout)
+        db.properties = [
+            POSProperty(name: "날짜", type: .date, sortIndex: 0),
+            POSProperty(name: "부위", type: .multiSelect, sortIndex: 1, config: parts),
+            POSProperty(name: "유형", type: .select, sortIndex: 2, config: kind),
+            POSProperty(name: "메모", type: .text, sortIndex: 3),
+            POSProperty(name: "분석됨", type: .checkbox, sortIndex: 4),
         ]
         return db
     }

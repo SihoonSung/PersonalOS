@@ -4,6 +4,7 @@ import SwiftData
 /// Liquid Glass 홈 대시보드 — 앱의 루트 화면.
 /// 좌상단: 데이터베이스 목록, 우상단: 설정. 카드 chevron으로 개별 DB 이동.
 struct DashboardView: View {
+    @Environment(\.modelContext) private var context
     @Query(sort: \POSDatabase.sortIndex) private var databases: [POSDatabase]
     var openDatabase: (POSDatabase) -> Void = { _ in }
     var onOpenDatabases: () -> Void = {}
@@ -55,6 +56,8 @@ struct DashboardView: View {
                     }
                 }
 
+                CalendarCard()
+
                 Spacer(minLength: 110)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -72,6 +75,7 @@ struct DashboardView: View {
                     .padding(.bottom, Theme.spacingM)
             }
         }
+        .onAppear { WidgetDataWriter.refresh(context: context) }
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button(action: onOpenDatabases) {

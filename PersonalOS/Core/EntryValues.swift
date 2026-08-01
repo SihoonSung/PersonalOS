@@ -43,6 +43,15 @@ extension POSEntry {
         value(for: property)?.boolValue ?? false
     }
 
+    /// 다중 선택 값 — textValue에 JSON 배열로 저장.
+    func textList(for property: POSProperty) -> [String] {
+        guard let raw = value(for: property)?.textValue,
+              let data = raw.data(using: .utf8),
+              let list = try? JSONDecoder().decode([String].self, from: data)
+        else { return [] }
+        return list
+    }
+
     // MARK: Typed setters
 
     func setText(_ newValue: String?, for property: POSProperty, context: ModelContext) {
@@ -66,6 +75,17 @@ extension POSEntry {
         touch()
     }
 
+    func setTextList(_ list: [String], for property: POSProperty, context: ModelContext) {
+        let v = ensureValue(for: property, context: context)
+        if list.isEmpty {
+            v.textValue = nil
+        } else {
+            v.textValue = (try? JSONEncoder().encode(list))
+                .flatMap { String(data: $0, encoding: .utf8) }
+        }
+        touch()
+    }
+
     // MARK: Display
 
     /// Human-readable string for any cell — used by list rows, Mac table, exports, MCP.
@@ -74,6 +94,8 @@ extension POSEntry {
         switch property.type {
         case .text, .select, .url:
             return v.textValue ?? ""
+        case .multiSelect:
+            return textList(for: property).joined(separator: ", ")
         case .checkbox:
             return (v.boolValue ?? false) ? "✓" : ""
         case .number:
@@ -98,6 +120,9 @@ extension POSEntry {
         switch property.type {
         case .text, .select, .url:
             return v.textValue
+        case .multiSelect:
+            let list = textList(for: property)
+            return list.isEmpty ? nil : list
         case .checkbox:
             return v.boolValue
         case .number:

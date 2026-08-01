@@ -84,6 +84,7 @@ struct DatabaseListView: View {
                     Section("템플릿 (Notion 연동용)") {
                         Button("📏 신체 기록") { createFromTemplate(Templates.makeBodyLog) }
                         Button("📒 표현 노트") { createFromTemplate(Templates.makeExpressions) }
+                        Button("🏋️ 운동 기록") { createFromTemplate(Templates.makeWorkout) }
                     }
                 } label: {
                     Label("새 데이터베이스", systemImage: "plus")

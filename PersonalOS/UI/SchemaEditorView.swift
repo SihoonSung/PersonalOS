@@ -116,7 +116,7 @@ struct PropertyEditorView: View {
                     }
                 }
 
-                if property.type == .select {
+                if property.type == .select || property.type == .multiSelect {
                     Section("선택 옵션 (쉼표로 구분)") {
                         TextField("예: 식비, 교통, 쇼핑", text: $optionsText, axis: .vertical)
                             .onChange(of: optionsText) {
