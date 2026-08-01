@@ -19,6 +19,13 @@ struct DashboardView: View {
         databases.first { $0.templateKey == TemplateKey.budget }
     }
 
+    /// 할 일/가계부를 제외한 나머지 — 템플릿별 전용 카드 or 제네릭 카드.
+    private var extraDatabases: [POSDatabase] {
+        databases.filter { db in
+            db.uuid != todoDatabase?.uuid && db.uuid != budgetDatabase?.uuid
+        }
+    }
+
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date.now)
         switch hour {
@@ -31,6 +38,20 @@ struct DashboardView: View {
 
     private var dateString: String {
         Date.now.formatted(.dateTime.year().month().day().weekday(.wide).locale(L.locale))
+    }
+
+    @ViewBuilder
+    private func extraCard(_ db: POSDatabase) -> some View {
+        switch db.templateKey {
+        case TemplateKey.bodyLog:
+            BodyLogCard(database: db, onOpen: { openDatabase(db) })
+        case TemplateKey.workout:
+            WorkoutCard(database: db, onOpen: { openDatabase(db) })
+        case TemplateKey.expressions:
+            ExpressionsCard(database: db, onOpen: { openDatabase(db) })
+        default:
+            GenericDatabaseCard(database: db, onOpen: { openDatabase(db) })
+        }
     }
 
     var body: some View {
@@ -57,6 +78,20 @@ struct DashboardView: View {
                 }
 
                 CalendarCard()
+
+                if !extraDatabases.isEmpty {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: Theme.spacingM, alignment: .top),
+                            GridItem(.flexible(), alignment: .top),
+                        ],
+                        spacing: Theme.spacingM
+                    ) {
+                        ForEach(extraDatabases) { db in
+                            extraCard(db)
+                        }
+                    }
+                }
 
                 Spacer(minLength: 110)
             }
