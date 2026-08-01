@@ -110,8 +110,10 @@ struct WorkoutCard: View {
     private var dated: [(date: Date, entry: POSEntry)] {
         let dateProp = database.dateProperty
         return (database.entries ?? [])
-            .map { (dateProp.flatMap { p in $0.date(for: p) } ?? $0.createdAt, $0) }
-            .sorted { $0.0 > $1.0 }
+            .map { entry -> (date: Date, entry: POSEntry) in
+                (dateProp.flatMap { entry.date(for: $0) } ?? entry.createdAt, entry)
+            }
+            .sorted { $0.date > $1.date }
     }
 
     var body: some View {
