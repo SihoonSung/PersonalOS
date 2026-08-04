@@ -53,6 +53,7 @@ enum WidgetDataWriter {
             let dateProp = budget.dateProperty
             let amountProp = budget.amountProperty
             let spent = (budget.entries ?? []).reduce(0.0) { partial, entry in
+                guard entry.countsAsSpending(in: budget) else { return partial }
                 let date = dateProp.flatMap { entry.date(for: $0) } ?? entry.createdAt
                 guard calendar.isDate(date, equalTo: .now, toGranularity: .month) else { return partial }
                 return partial + (amountProp.flatMap { entry.number(for: $0) } ?? 0)
@@ -64,6 +65,28 @@ enum WidgetDataWriter {
                 snapshot.remainingText = budget.formattedAmount(monthlyBudget - spent)
                 snapshot.budgetProgress = min(spent / monthlyBudget, 1.0)
                 snapshot.overBudget = spent > monthlyBudget
+            }
+
+            // ── 잔액 · 고정지출 ──
+            if let balance = BalanceService.snapshot(database: budget, context: context) {
+                let fixedRemaining = RecurringDetector.remainingThisMonth(
+                    RecurringDetector.detect(in: budget)
+                )
+                snapshot.balanceSet = true
+                snapshot.balanceText = budget.formattedAmount(balance.current)
+                snapshot.balanceNegative = balance.current < 0
+                snapshot.balanceAsOfText = balance.anchoredAt
+                    .formatted(.dateTime.month().day().locale(L.locale))
+                if fixedRemaining > 0 {
+                    snapshot.fixedRemainingText = budget.formattedAmount(fixedRemaining)
+                    snapshot.freeToSpendText = budget.formattedAmount(balance.current - fixedRemaining)
+                }
+            }
+
+            if let reviewed = budget.reviewedProperty {
+                snapshot.unreviewedCount = (budget.entries ?? [])
+                    .filter { $0.sourceKind == "email" && !$0.bool(for: reviewed) }
+                    .count
             }
         }
 

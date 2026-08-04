@@ -1,9 +1,12 @@
 import WidgetKit
 import SwiftUI
 
-// PersonalOS 홈 화면 위젯 — 오늘 할 일 + 예산.
-// 이 폴더의 파일들 + PersonalOS/Core/WidgetSnapshot.swift를
-// 위젯 타깃 멤버로 추가할 것.
+// PersonalOS 위젯 — 오늘 할 일 / 예산 / 잔액 / 성경 구절 시계.
+//
+// 위젯 타깃 멤버로 추가할 것:
+//   PersonalOS/Core/WidgetSnapshot.swift
+//   PersonalOS/Core/VerseClock.swift
+//   PersonalOS/Resources/verse-clock.json   ← Copy Bundle Resources 에도
 
 struct SnapshotEntry: TimelineEntry {
     let date: Date
@@ -39,6 +42,12 @@ extension WidgetSnapshot {
         s.budgetSet = true
         s.remainingText = "$873"
         s.budgetProgress = 0.71
+        s.balanceSet = true
+        s.balanceText = "$1,760"
+        s.balanceAsOfText = "8월 2일"
+        s.fixedRemainingText = "$570"
+        s.freeToSpendText = "$1,190"
+        s.unreviewedCount = 3
         return s
     }
 }
@@ -172,6 +181,231 @@ struct BudgetWidget: Widget {
     }
 }
 
+
+// MARK: - 잔액 위젯
+
+struct BalanceWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: SnapshotEntry
+
+    private var snapshot: WidgetSnapshot { entry.snapshot }
+
+    var body: some View {
+        switch family {
+        case .accessoryRectangular:
+            rectangular
+        case .accessoryCircular:
+            circular
+        case .accessoryInline:
+            Text(snapshot.balanceSet ? "남은 돈 \(snapshot.balanceText)" : "잔액 미설정")
+        default:
+            home
+        }
+    }
+
+    private var home: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("남은 돈")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            if snapshot.balanceSet {
+                Text(snapshot.balanceText)
+                    .font(.system(.title2, design: .rounded).weight(.semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .foregroundStyle(snapshot.balanceNegative ? Color.red : Color.primary)
+
+                if !snapshot.freeToSpendText.isEmpty {
+                    Divider().padding(.vertical, 1)
+                    Text("고정지출 \(snapshot.fixedRemainingText) 빼면")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text(snapshot.freeToSpendText)
+                        .font(.footnote.weight(.semibold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                if snapshot.unreviewedCount > 0 {
+                    Text("검토 \(snapshot.unreviewedCount)건")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.orange)
+                } else if !snapshot.balanceAsOfText.isEmpty {
+                    Text("\(snapshot.balanceAsOfText) 기준")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+            } else {
+                Spacer()
+                Text("앱에서 잔고를\n한 번 입력해 주세요")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+        }
+        .containerBackground(for: .widget) { Color.clear }
+    }
+
+    private var rectangular: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("남은 돈")
+                .font(.caption2)
+                .widgetAccentable()
+            Text(snapshot.balanceSet ? snapshot.balanceText : "—")
+                .font(.headline)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            if !snapshot.freeToSpendText.isEmpty {
+                Text("쓸 수 있는 돈 \(snapshot.freeToSpendText)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .containerBackground(for: .widget) { Color.clear }
+    }
+
+    private var circular: some View {
+        VStack(spacing: 0) {
+            Image(systemName: "banknote")
+                .font(.system(size: 11))
+            Text(snapshot.balanceSet ? snapshot.balanceText : "—")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+        }
+        .containerBackground(for: .widget) { Color.clear }
+    }
+}
+
+struct BalanceWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "BalanceWidget", provider: SnapshotProvider()) { entry in
+            BalanceWidgetView(entry: entry)
+        }
+        .configurationDisplayName("남은 돈")
+        .description("계좌 잔액과, 고정지출을 뺀 실제 가용액")
+        .supportedFamilies([
+            .systemSmall,
+            .accessoryRectangular, .accessoryCircular, .accessoryInline,
+        ])
+    }
+}
+
+// MARK: - 성경 구절 시계
+
+struct VerseEntry: TimelineEntry {
+    let date: Date
+    let verse: VerseClockEntry?
+}
+
+/// 1분마다 구절이 바뀌어야 하는데, 위젯 확장을 1분마다 깨울 수는 없다.
+/// 대신 한 시간치(60개) 엔트리를 미리 만들어 넘긴다 — 시스템이 이미 받아둔
+/// 엔트리를 시각에 맞춰 그려주므로 하루 24번만 깨어나면 된다.
+struct VerseProvider: TimelineProvider {
+    private static let entriesPerBatch = 60
+
+    func placeholder(in context: Context) -> VerseEntry {
+        VerseEntry(date: .now, verse: VerseClock.entry(for: .now))
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (VerseEntry) -> Void) {
+        completion(VerseEntry(date: .now, verse: VerseClock.entry(for: .now)))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<VerseEntry>) -> Void) {
+        let calendar = Calendar.current
+        // 이번 분의 0초에서 시작해야 표시가 시계와 어긋나지 않는다.
+        let start = calendar.date(
+            from: calendar.dateComponents([.year, .month, .day, .hour, .minute], from: .now)
+        ) ?? .now
+
+        var entries: [VerseEntry] = []
+        for offset in 0..<Self.entriesPerBatch {
+            guard let date = calendar.date(byAdding: .minute, value: offset, to: start) else { continue }
+            entries.append(VerseEntry(date: date, verse: VerseClock.entry(for: date)))
+        }
+        completion(Timeline(entries: entries, policy: .atEnd))
+    }
+}
+
+struct VerseClockWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.isLuminanceReduced) private var isDimmed
+    let entry: VerseEntry
+
+    private var isCompact: Bool { family == .systemSmall }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(entry.date, format: .dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
+                    .font(.system(size: isCompact ? 34 : 44, weight: .light, design: .rounded))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if let verse = entry.verse, verse.isExact {
+                    Text("\(verse.chapter):\(verse.verse)")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            if let verse = entry.verse {
+                Text(verse.text)
+                    .font(.system(size: isCompact ? 11 : 13, design: .serif))
+                    .lineSpacing(isCompact ? 1 : 2)
+                    .lineLimit(isCompact ? 4 : 5)
+                    .minimumScaleFactor(0.75)
+                    .foregroundStyle(isDimmed ? .secondary : .primary)
+
+                Spacer(minLength: 0)
+
+                Text(verse.reference)
+                    .font(.system(size: isCompact ? 10 : 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .widgetAccentable()
+            } else {
+                Spacer()
+                Text("verse-clock.json을 위젯 타깃에 추가해 주세요")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .containerBackground(for: .widget) {
+            // StandBy 야간 모드에선 시스템이 알아서 붉게 틴트한다.
+            // 배경을 칠하면 그 처리가 지저분해지므로 비워둔다.
+            renderingMode == .fullColor ? AnyView(Color.clear) : AnyView(Color.clear)
+        }
+    }
+}
+
+struct VerseClockWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "VerseClockWidget", provider: VerseProvider()) { entry in
+            VerseClockWidgetView(entry: entry)
+        }
+        .configurationDisplayName("말씀 시계")
+        .description("지금 시각을 장:절로 읽어요 — 7:21이면 마태복음 7:21")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
 // MARK: - Bundle
 
 @main
@@ -179,5 +413,7 @@ struct PersonalOSWidgets: WidgetBundle {
     var body: some Widget {
         TodayWidget()
         BudgetWidget()
+        BalanceWidget()
+        VerseClockWidget()
     }
 }

@@ -50,6 +50,14 @@ struct DatabaseView: View {
                         Label("Notion 동기화", systemImage: "arrow.triangle.2.circlepath")
                     }
                 }
+                if database.templateKey == TemplateKey.budget && MailSettings.isConfigured {
+                    Button {
+                        Task { await MailSyncService.shared.syncNow() }
+                    } label: {
+                        Label("메일 가져오기", systemImage: "envelope.arrow.triangle.branch")
+                    }
+                    .disabled(MailSyncService.shared.isSyncing)
+                }
                 if !isTemplateView {
                     Menu {
                         Picker("정렬", selection: $sortDescending) {

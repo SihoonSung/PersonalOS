@@ -181,6 +181,37 @@ actor NotionAPI {
         _ = try await request("PATCH", "pages/\(id)", body: ["archived": true])
     }
 
+    // MARK: Page body (blocks)
+    //
+    // 속성 동기화와 달리 본문은 **요청할 때만** 읽는다. 페이지마다 최소 한 번의
+    // 왕복이 필요해서 동기화 루프에 넣으면 비용이 감당이 안 된다.
+
+    /// 페이지(또는 블록)의 자식 블록 전체. 중첩은 따라가지 않는다 —
+    /// 화면에 보여주고 뒤에 덧붙이는 용도라 최상위면 충분하다.
+    func blockChildren(of blockID: String) async throws -> [[String: Any]] {
+        var blocks: [[String: Any]] = []
+        var cursor: String?
+        repeat {
+            var path = "blocks/\(blockID)/children?page_size=100"
+            if let cursor { path += "&start_cursor=\(cursor)" }
+            let json = try await request("GET", path)
+            blocks.append(contentsOf: json["results"] as? [[String: Any]] ?? [])
+            cursor = (json["has_more"] as? Bool == true) ? json["next_cursor"] as? String : nil
+        } while cursor != nil
+        return blocks
+    }
+
+    /// 블록을 덧붙인다. `after`를 주면 그 블록 **바로 뒤**에 끼워 넣는다
+    /// (예: "📝 내 일기" 제목 아래). 없으면 페이지 맨 끝.
+    ///
+    /// 덧붙이기만 하고 기존 블록은 절대 건드리지 않는다 — 루틴이 만들어 둔
+    /// 서식 있는 본문을 앱이 평문으로 되써서 날려버리는 사고를 막기 위함.
+    func appendBlocks(to blockID: String, children: [[String: Any]], after: String? = nil) async throws {
+        var body: [String: Any] = ["children": children]
+        if let after { body["after"] = after }
+        _ = try await request("PATCH", "blocks/\(blockID)/children", body: body)
+    }
+
     // MARK: Helpers
 
     /// Concatenated plain text of a Notion rich-text / title array.

@@ -7,10 +7,77 @@ struct SettingsView: View {
     @AppStorage(AppSettings.mcpPortKey) private var mcpPort = 4141
     @ObservedObject private var ai = AIService.shared
     @Query(sort: \POSDatabase.sortIndex) private var databases: [POSDatabase]
+    @State private var showingMailSettings = false
     @State private var showingNotionSettings = false
+    @AppStorage(AppLock.enabledKey) private var appLockEnabled = false
+    private let sync = MailSyncService.shared
+
+    private var budgetDatabase: POSDatabase? {
+        databases.first { $0.templateKey == TemplateKey.budget }
+    }
+
+    private func unreviewedCount(in database: POSDatabase) -> Int {
+        guard let reviewed = database.reviewedProperty else { return 0 }
+        return (database.entries ?? []).filter { $0.sourceKind == "email" && !$0.bool(for: reviewed) }.count
+    }
 
     var body: some View {
         Form {
+            Section {
+                Button {
+                    showingMailSettings = true
+                } label: {
+                    HStack {
+                        Label("메일 가계부", systemImage: "envelope.arrow.triangle.branch")
+                        Spacer()
+                        Text(MailSettings.isConfigured ? "켜짐" : "꺼짐")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                if MailSettings.isConfigured {
+                    Button {
+                        Task { await sync.syncNow() }
+                    } label: {
+                        HStack {
+                            Label("지금 가져오기", systemImage: "arrow.down.circle")
+                            Spacer()
+                            if sync.isSyncing {
+                                Text(sync.progressText)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(sync.isSyncing)
+
+                    if let result = sync.lastResult {
+                        Text(result.summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let budget = budgetDatabase {
+                    NavigationLink {
+                        ReviewQueueView(database: budget)
+                    } label: {
+                        HStack {
+                            Label("검토 대기", systemImage: "tray.full")
+                            Spacer()
+                            Text("\(unreviewedCount(in: budget))건")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } header: {
+                Text("가계부")
+            } footer: {
+                Text("Chase 알림 메일을 읽어서 가계부에 자동으로 넣어요. 메일은 읽기만 하고 건드리지 않습니다.")
+            }
+
             Section {
                 Button {
                     showingNotionSettings = true
@@ -23,6 +90,37 @@ struct SettingsView: View {
                     }
                 }
                 .buttonStyle(.plain)
+            } header: {
+                Text("Notion")
+            } footer: {
+                Text("데이터베이스별로 노션과 양방향 동기화할 수 있어요. 연결하지 않으면 이 기기와 iCloud에만 저장됩니다.")
+            }
+
+            Section {
+                Toggle("앱 잠금", isOn: $appLockEnabled)
+                    .onChange(of: appLockEnabled) {
+                        AppLock.isEnabled = appLockEnabled
+                        if appLockEnabled { AppLock.shared.lockNow() }
+                    }
+                    .disabled(!AppLock.isAvailable)
+            } header: {
+                Text("보안")
+            } footer: {
+                if AppLock.isAvailable {
+                    Text("앱을 열 때 \(AppLock.biometryName)로 확인해요. 잠깐 다른 앱에 다녀오는 정도(1분 이내)로는 다시 묻지 않습니다.")
+                } else {
+                    Text("이 기기에 잠금 암호가 설정돼 있지 않아 앱 잠금을 쓸 수 없어요.")
+                }
+            }
+
+            if let budget = budgetDatabase {
+                Section {
+                    NavigationLink {
+                        RecurringView(database: budget)
+                    } label: {
+                        Label("고정지출", systemImage: "arrow.trianglehead.2.clockwise")
+                    }
+                }
             }
 
             Section {
@@ -59,10 +157,9 @@ struct SettingsView: View {
 
             Section("데이터 내보내기") {
                 ForEach(databases) { db in
-                    ShareLink(
-                        item: ExportService.json(for: db),
-                        preview: SharePreview("\(db.name).json")
-                    ) {
+                    NavigationLink {
+                        ExportDatabaseView(database: db)
+                    } label: {
                         Label("\(db.icon) \(db.name) — JSON", systemImage: "square.and.arrow.up")
                     }
                 }
@@ -75,6 +172,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $showingMailSettings) {
+            MailSettingsView()
+        }
         .sheet(isPresented: $showingNotionSettings) {
             NotionSettingsView()
         }
@@ -86,6 +186,39 @@ struct SettingsView: View {
 }
 
 // MARK: - Export
+
+/// Serializing a database is O(entries × properties), so it happens here on
+/// demand instead of inline in the settings list — that list re-renders on
+/// every sync progress tick.
+private struct ExportDatabaseView: View {
+    let database: POSDatabase
+    @State private var payload: String?
+
+    var body: some View {
+        Group {
+            if let payload {
+                VStack(spacing: Theme.spacingM) {
+                    ShareLink(item: payload, preview: SharePreview("\(database.name).json")) {
+                        Label("JSON 내보내기", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    ScrollView {
+                        Text(payload.prefix(4000))
+                            .font(.system(.caption2, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding()
+            } else {
+                ProgressView()
+            }
+        }
+        .navigationTitle("\(database.icon) \(database.name)")
+        .task { payload = ExportService.json(for: database) }
+    }
+}
 
 enum ExportService {
 

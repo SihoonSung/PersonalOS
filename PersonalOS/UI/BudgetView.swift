@@ -18,6 +18,7 @@ struct BudgetView: View {
     @AppStorage("monthlyBudget") private var monthlyBudget: Double = 0
     @State private var showingBudgetEditor = false
     @State private var budgetInput = ""
+    @State private var showingBalanceEditor = false
 
     private var calendar: Calendar { .current }
 
@@ -28,10 +29,13 @@ struct BudgetView: View {
         let date: Date
         let amount: Double
         let category: String
+        let kind: String
         var id: UUID { entry.uuid }
+        var isSpending: Bool { kind == EntryKind.expense }
     }
 
-    private var allItems: [Item] {
+    /// Every row, 지출/수입/이체 alike. Analytics below narrow to 지출.
+    private var everyItem: [Item] {
         let dateProp = database.dateProperty
         let amountProp = database.amountProperty
         let categoryProp = database.categoryProperty
@@ -40,16 +44,38 @@ struct BudgetView: View {
                 entry: entry,
                 date: dateProp.flatMap { entry.date(for: $0) } ?? entry.createdAt,
                 amount: amountProp.flatMap { entry.number(for: $0) } ?? 0,
-                category: categoryProp.flatMap { entry.text(for: $0) } ?? "기타"
+                category: categoryProp.flatMap { entry.text(for: $0) } ?? "기타",
+                kind: entry.kind(in: database)
             )
         }
     }
+
+    /// Spending only — 수입과 이체는 지출 합계·예산·차트에서 빠진다.
+    private var allItems: [Item] { everyItem.filter(\.isSpending) }
 
     private var monthItems: [Item] {
         allItems.filter { calendar.isDate($0.date, equalTo: monthAnchor, toGranularity: .month) }
     }
 
     private var monthTotal: Double { monthItems.map(\.amount).reduce(0, +) }
+
+    /// 실제 수입만 — 정산금은 잔액에는 반영되지만 여기엔 안 잡힌다.
+    private var monthIncome: Double {
+        everyItem
+            .filter { EntryKind.countsAsIncome($0.kind) && calendar.isDate($0.date, equalTo: monthAnchor, toGranularity: .month) }
+            .map(\.amount)
+            .reduce(0, +)
+    }
+
+    private var balance: BalanceSnapshot? {
+        BalanceService.snapshot(database: database, context: context)
+    }
+
+    /// Imported rows the user hasn't confirmed yet.
+    private var unreviewed: [POSEntry] {
+        guard let reviewed = database.reviewedProperty else { return [] }
+        return (database.entries ?? []).filter { $0.sourceKind == "email" && !$0.bool(for: reviewed) }
+    }
 
     // MARK: Period analytics
 
@@ -134,9 +160,18 @@ struct BudgetView: View {
         monthItems.max { $0.amount < $1.amount }
     }
 
+    /// The ledger at the bottom lists everything — hiding 수입 rows there
+    /// would make the month look like money vanished.
     private var dayGroups: [(day: Date, items: [Item], total: Double)] {
-        Dictionary(grouping: monthItems) { calendar.startOfDay(for: $0.date) }
-            .map { ($0.key, $0.value.sorted { $0.date > $1.date }, $0.value.map(\.amount).reduce(0, +)) }
+        let items = everyItem.filter { calendar.isDate($0.date, equalTo: monthAnchor, toGranularity: .month) }
+        return Dictionary(grouping: items) { calendar.startOfDay(for: $0.date) }
+            .map { group in
+                (
+                    group.key,
+                    group.value.sorted { $0.date > $1.date },
+                    group.value.filter(\.isSpending).map(\.amount).reduce(0, +)
+                )
+            }
             .sorted { $0.0 > $1.0 }
     }
 
@@ -177,12 +212,37 @@ struct BudgetView: View {
         } message: {
             Text("한 달 지출 목표를 정하면 남은 예산과 사용률을 보여줘요.")
         }
+        .sheet(isPresented: $showingBalanceEditor) {
+            BalanceEditorView(database: database)
+        }
     }
 
     private var dashboard: some View {
         List {
+            if !unreviewed.isEmpty {
+                Section {
+                    NavigationLink {
+                        ReviewQueueView(database: database)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "tray.full")
+                                .foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("메일에서 가져온 거래 \(unreviewed.count)건")
+                                    .font(.subheadline.weight(.medium))
+                                Text("카테고리를 확인하고 확정해 주세요")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+            }
+
             Section {
                 monthHeader
+                balanceRow
                 heroSummary
                 budgetRow
             }
@@ -328,6 +388,9 @@ struct BudgetView: View {
                 if let projected = projectedTotal {
                     statBlock("월말 예상", fmt(projected))
                 }
+                if monthIncome > 0 {
+                    statBlock("수입", fmt(monthIncome))
+                }
                 statBlock("거래", "\(monthItems.count)건")
             }
             .padding(.top, 2)
@@ -362,6 +425,43 @@ struct BudgetView: View {
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Balance
+
+    @ViewBuilder
+    private var balanceRow: some View {
+        if let balance {
+            Button {
+                showingBalanceEditor = true
+            } label: {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("남은 돈")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                        Text("\(balance.anchoredAt.formatted(date: .abbreviated, time: .omitted)) 기준 · 이후 \(balance.appliedCount)건")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                    Text(fmt(balance.current))
+                        .font(.system(.title3, design: .rounded).weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(balance.current < 0 ? Theme.negativeRed : Color.primary)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 2)
+        } else {
+            Button {
+                showingBalanceEditor = true
+            } label: {
+                Label("계좌 잔액 설정", systemImage: "banknote")
+                    .font(.subheadline)
+            }
+            .buttonStyle(.borderless)
+        }
     }
 
     // MARK: Budget progress
@@ -620,17 +720,23 @@ struct BudgetView: View {
 
     // MARK: Rows
 
-    private func entryRow(_ item: Item) -> some View {
+    private func entryRow(_ item: Item, showDate: Bool = false) -> some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.entry.title.isEmpty ? "(제목 없음)" : item.entry.title)
                     .lineLimit(1)
                 subtitle(for: item)
+                if showDate {
+                    Text(item.date.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
             Spacer()
-            Text(fmt(item.amount))
+            Text((EntryKind.sign(item.kind) > 0 ? "+" : "") + fmt(item.amount))
                 .font(.body.weight(.medium))
                 .monospacedDigit()
+                .foregroundStyle(EntryKind.sign(item.kind) > 0 ? Theme.incomeGreen : .primary)
         }
         .contentShape(Rectangle())
         .onTapGesture { editingEntry = item.entry }
@@ -646,10 +752,13 @@ struct BudgetView: View {
 
     @ViewBuilder
     private func subtitle(for item: Item) -> some View {
+        let needsReview = database.reviewedProperty.map {
+            item.entry.sourceKind == "email" && !item.entry.bool(for: $0)
+        } ?? false
         let parts = [
-            item.category,
-            database.orderedProperties.first { $0.name == "결제수단" }
-                .flatMap { item.entry.text(for: $0) } ?? "",
+            item.kind == EntryKind.expense ? item.category : item.kind,
+            database.methodProperty.flatMap { item.entry.text(for: $0) } ?? "",
+            needsReview ? "검토 대기" : "",
         ].filter { !$0.isEmpty }
         if !parts.isEmpty {
             HStack(spacing: 5) {
@@ -668,7 +777,7 @@ struct BudgetView: View {
 
     private var searchResults: some View {
         let query = searchText.lowercased()
-        let results = allItems
+        let results = everyItem
             .filter { item in
                 item.entry.title.lowercased().contains(query)
                     || item.category.lowercased().contains(query)
@@ -681,14 +790,10 @@ struct BudgetView: View {
                 ContentUnavailableView.search(text: searchText)
             } else {
                 List {
+                    // entryRow must BE the row, not be wrapped in one: swipe
+                    // actions and row backgrounds only apply at the top level.
                     ForEach(results) { item in
-                        VStack(alignment: .leading, spacing: 2) {
-                            entryRow(item)
-                            Text(item.date.formatted(date: .abbreviated, time: .omitted))
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                        entryRow(item, showDate: true)
                     }
                 }
                 .scrollContentBackground(.hidden)

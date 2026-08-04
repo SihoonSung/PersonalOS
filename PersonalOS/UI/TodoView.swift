@@ -211,8 +211,8 @@ struct TodoView: View {
             item.entry.setBool(!item.done, for: doneProp, context: context)
             try? context.save()
         }
-        NotionSyncService.shared.scheduleAutoSync()
         WidgetDataWriter.refresh(context: context)
+        NotionSyncService.shared.scheduleAutoSync()
     }
 
     private func delete(_ entry: POSEntry) {

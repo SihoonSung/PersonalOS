@@ -21,6 +21,18 @@ struct EntryDetailView: View {
                         PropertyFieldView(entry: entry, property: property)
                     }
                 }
+                if entry.notionPageID != nil {
+                    Section {
+                        NavigationLink {
+                            EntryBodyView(entry: entry)
+                        } label: {
+                            Label("노션 본문", systemImage: "doc.text")
+                        }
+                    } footer: {
+                        Text("노션 페이지에 적힌 글을 읽고, 그 아래에 이어서 쓸 수 있어요.")
+                    }
+                }
+
                 Section {
                     LabeledContent("생성", value: entry.createdAt.formatted(date: .abbreviated, time: .shortened))
                     LabeledContent("수정", value: entry.updatedAt.formatted(date: .abbreviated, time: .shortened))

@@ -5,6 +5,7 @@ import SwiftData
 enum Route: Hashable {
     case databases
     case database(POSDatabase)
+    case recurring(POSDatabase)
     case settings
 }
 
@@ -17,7 +18,8 @@ struct RootView: View {
             DashboardView(
                 openDatabase: { path.append(.database($0)) },
                 onOpenDatabases: { path.append(.databases) },
-                onOpenSettings: { path.append(.settings) }
+                onOpenSettings: { path.append(.settings) },
+                onOpenRecurring: { path.append(.recurring($0)) }
             )
             .navigationDestination(for: Route.self) { route in
                 switch route {
@@ -25,6 +27,9 @@ struct RootView: View {
                     DatabaseListView(openDatabase: { path.append(.database($0)) })
                 case .database(let db):
                     DatabaseView(database: db)
+                        .id(db.uuid)
+                case .recurring(let db):
+                    RecurringView(database: db)
                         .id(db.uuid)
                 case .settings:
                     SettingsView()
@@ -81,10 +86,13 @@ struct DatabaseListView: View {
                     } label: {
                         Label("빈 데이터베이스", systemImage: "square.dashed")
                     }
-                    Section("템플릿 (Notion 연동용)") {
-                        Button("📏 신체 기록") { createFromTemplate(Templates.makeBodyLog) }
-                        Button("📒 표현 노트") { createFromTemplate(Templates.makeExpressions) }
-                        Button("🏋️ 운동 기록") { createFromTemplate(Templates.makeWorkout) }
+                    Section("템플릿") {
+                        // 함수를 값으로 넘기면 MainActor 격리가 벗겨져 경고가 난다.
+                        // 클로저로 감싸면 호출이 MainActor 안에서 일어난다.
+                        Button("📏 신체 기록") { createFromTemplate { Templates.makeBodyLog(sortIndex: $0) } }
+                        Button("📒 표현 노트") { createFromTemplate { Templates.makeExpressions(sortIndex: $0) } }
+                        Button("🏋️ 운동 기록") { createFromTemplate { Templates.makeWorkout(sortIndex: $0) } }
+                        Button("✅ Tasks (노션)") { createFromTemplate { Templates.makeNotionTasks(sortIndex: $0) } }
                     }
                 } label: {
                     Label("새 데이터베이스", systemImage: "plus")

@@ -136,6 +136,11 @@ struct NotionSettingsView: View {
 
             if let at = sync.lastSyncAt {
                 LabeledContent("마지막 동기화", value: at.formatted(.relative(presentation: .named)))
+            } else {
+                LabeledContent("마지막 동기화", value: "없음")
+            }
+            if sync.pendingArchiveCount > 0 {
+                LabeledContent("반영 대기 중인 삭제", value: "\(sync.pendingArchiveCount)건")
             }
             if let error = sync.lastError {
                 Text(error)

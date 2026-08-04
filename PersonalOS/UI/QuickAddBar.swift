@@ -109,7 +109,7 @@ struct QuickAddBar: View {
             }
         }
         try? context.save()
-        NotionSyncService.shared.scheduleAutoSync()
         WidgetDataWriter.refresh(context: context)
+        NotionSyncService.shared.scheduleAutoSync()
     }
 }

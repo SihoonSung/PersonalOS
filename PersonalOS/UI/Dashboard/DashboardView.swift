@@ -9,6 +9,7 @@ struct DashboardView: View {
     var openDatabase: (POSDatabase) -> Void = { _ in }
     var onOpenDatabases: () -> Void = {}
     var onOpenSettings: () -> Void = {}
+    var onOpenRecurring: (POSDatabase) -> Void = { _ in }
 
     private var todoDatabase: POSDatabase? {
         databases.first { $0.templateKey == TemplateKey.todo }
@@ -66,15 +67,22 @@ struct DashboardView: View {
                 }
                 .padding(.top, Theme.spacingS)
 
+                // 문제가 있을 때만 나타난다 (정상이면 EmptyView).
+                NotionStatusCard()
+
                 if let todo = todoDatabase {
                     TodayFocusCard(database: todo, onOpen: { openDatabase(todo) })
                 }
 
                 if let budget = budgetDatabase {
+                    BalanceCard(database: budget, onOpen: { openDatabase(budget) })
+
                     HStack(alignment: .top, spacing: Theme.spacingM) {
                         BudgetSummaryCard(database: budget, onOpen: { openDatabase(budget) })
                         TodaySpendCard(database: budget)
                     }
+
+                    FixedCostCard(database: budget, onOpen: { onOpenRecurring(budget) })
                 }
 
                 CalendarCard()

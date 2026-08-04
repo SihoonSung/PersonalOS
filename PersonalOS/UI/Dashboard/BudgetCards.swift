@@ -21,6 +21,7 @@ struct BudgetSummaryCard: View {
         let dateProp = database.dateProperty
         let amountProp = database.amountProperty
         return (database.entries ?? []).reduce(0) { partial, entry in
+            guard entry.countsAsSpending(in: database) else { return partial }
             let date = dateProp.flatMap { entry.date(for: $0) } ?? entry.createdAt
             guard calendar.isDate(date, equalTo: .now, toGranularity: .month) else { return partial }
             return partial + (amountProp.flatMap { entry.number(for: $0) } ?? 0)
@@ -138,7 +139,7 @@ struct TodaySpendCard: View {
         let dateProp = database.dateProperty
         let amountProp = database.amountProperty
         let categoryProp = database.categoryProperty
-        return (database.entries ?? []).map { entry in
+        return (database.entries ?? []).filter { $0.countsAsSpending(in: database) }.map { entry in
             Row(
                 date: dateProp.flatMap { entry.date(for: $0) } ?? entry.createdAt,
                 amount: amountProp.flatMap { entry.number(for: $0) } ?? 0,

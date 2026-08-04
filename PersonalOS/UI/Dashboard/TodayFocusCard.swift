@@ -164,7 +164,7 @@ struct TodayFocusCard: View {
             item.entry.setBool(true, for: doneProp, context: context)
             try? context.save()
         }
-        NotionSyncService.shared.scheduleAutoSync()
         WidgetDataWriter.refresh(context: context)
+        NotionSyncService.shared.scheduleAutoSync()
     }
 }

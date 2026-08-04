@@ -317,6 +317,11 @@ enum NotionMapper {
     ) {
         entry.title = title(fromPage: page, mapping: mapping)
 
+        // 카테고리가 노션 쪽에서 바뀌어 내려왔는지 보려고 적용 전 값을 잡아둔다.
+        let database = entry.database
+        let categoryProperty = database?.categoryProperty
+        let previousCategory = categoryProperty.flatMap { entry.text(for: $0) }
+
         let props = page["properties"] as? [String: Any] ?? [:]
         for link in mapping.compatibleLinks {
             guard let raw = props[link.notionName] as? [String: Any] else { continue }
@@ -365,5 +370,42 @@ enum NotionMapper {
                 entry.setText(raw["url"] as? String, for: property, context: context)
             }
         }
+
+        learnCategoryCorrection(
+            entry: entry,
+            database: database,
+            categoryProperty: categoryProperty,
+            previousCategory: previousCategory,
+            context: context
+        )
+    }
+
+    /// 노션에서 메일 거래의 카테고리를 사람이(또는 검증 루틴이) 고쳐 내려보내면,
+    /// 그 가게를 다음부터 같은 카테고리로 넣도록 규칙을 학습한다.
+    ///
+    /// 이게 없으면 노션에서 고쳐도 앱이 같은 가게를 매번 똑같이 잘못 분류한다 —
+    /// 고침이 영원히 반복된다.
+    @MainActor
+    private static func learnCategoryCorrection(
+        entry: POSEntry,
+        database: POSDatabase?,
+        categoryProperty: POSProperty?,
+        previousCategory: String?,
+        context: ModelContext
+    ) {
+        // 메일로 들어온 항목만 — 손으로 적은 건 가게 문자열이 없어 일반화할 수 없다.
+        guard entry.sourceKind == "email",
+              let categoryProperty,
+              let newCategory = entry.text(for: categoryProperty),
+              !newCategory.isEmpty,
+              newCategory != previousCategory,
+              let sourceProperty = database?.sourceProperty,
+              let rawSource = entry.text(for: sourceProperty),
+              !rawSource.isEmpty
+        else { return }
+
+        // 출처 이메일은 "<가게 원문> · <메모>" 형태로 저장된다.
+        let pattern = rawSource.components(separatedBy: " · ").first ?? rawSource
+        CategoryRules.teach(pattern: pattern, category: newCategory, context: context)
     }
 }

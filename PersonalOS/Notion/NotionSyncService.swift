@@ -28,17 +28,58 @@ final class NotionSyncService: ObservableObject {
     @Published private(set) var isSyncing = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastSyncAt: Date?
+    /// 아직 노션에 반영 못 한 삭제 건수 (오프라인/실패로 밀린 것).
+    @Published private(set) var pendingArchiveCount = 0
 
     private var container: ModelContainer?
     private var autoSyncTask: Task<Void, Never>?
 
     private let pendingArchiveKey = "notion.pendingArchivePageIDs"
+    private let lastSyncAtKey = "notion.lastSyncAt"
+
+    /// 마지막 성공이 이보다 오래됐으면 "지연"으로 본다. 자동 동기화가 3초
+    /// 디바운스로 도니까, 몇 시간씩 성공이 없다는 건 뭔가 막혔다는 뜻이다.
+    private let staleAfter: TimeInterval = 6 * 60 * 60
+
+    /// 지금 동기화가 건강한지 — 대시보드 배지가 이걸 본다.
+    enum Health: Equatable {
+        case idle          // 연결된 DB 없음 / 토큰 없음 → 아무것도 표시하지 않는다
+        case ok
+        case syncing
+        case stale(Date?)  // 마지막 성공이 오래됨
+        case failing(String)
+    }
+
+    /// `linkedCount`는 뷰가 @Query로 세어 넘긴다 (서비스가 컨텍스트를 다시
+    /// 읽으면 뷰 갱신과 어긋난다).
+    func health(linkedCount: Int) -> Health {
+        guard linkedCount > 0, !storedToken.isEmpty else { return .idle }
+        if let lastError, !lastError.isEmpty { return .failing(lastError) }
+        if isSyncing { return .syncing }
+        guard let lastSyncAt else { return .stale(nil) }
+        return Date.now.timeIntervalSince(lastSyncAt) > staleAfter ? .stale(lastSyncAt) : .ok
+    }
 
     // MARK: Setup
 
     func configure(container: ModelContainer) {
         self.container = container
+        // 앱을 껐다 켜도 "마지막 성공"이 남아 있어야 지연 판정이 가능하다.
+        if let stored = UserDefaults.standard.object(forKey: lastSyncAtKey) as? Date {
+            lastSyncAt = stored
+        }
+        refreshPendingCount()
         Task { await NotionAPI.shared.setToken(KeychainStore.get(KeychainStore.notionTokenKey)) }
+    }
+
+    private func refreshPendingCount() {
+        pendingArchiveCount = (UserDefaults.standard.stringArray(forKey: pendingArchiveKey) ?? []).count
+    }
+
+    private func markSyncSucceeded() {
+        lastSyncAt = .now
+        UserDefaults.standard.set(lastSyncAt, forKey: lastSyncAtKey)
+        refreshPendingCount()
     }
 
     func updateToken(_ token: String) {
@@ -63,6 +104,7 @@ final class NotionSyncService: ObservableObject {
             pending.append(pageID)
             UserDefaults.standard.set(pending, forKey: pendingArchiveKey)
         }
+        refreshPendingCount()
         scheduleAutoSync()
     }
 
@@ -103,7 +145,11 @@ final class NotionSyncService: ObservableObject {
             }
         }
         lastError = errors.isEmpty ? nil : errors.joined(separator: "\n")
-        if errors.isEmpty { lastSyncAt = .now }
+        if errors.isEmpty {
+            markSyncSucceeded()
+        } else {
+            refreshPendingCount()
+        }
     }
 
     /// Manual sync for a single database (used by the per-database UI).
@@ -116,9 +162,10 @@ final class NotionSyncService: ObservableObject {
         await flushPendingArchives()
         do {
             try await sync(database: database, context: container.mainContext)
-            lastSyncAt = .now
+            markSyncSucceeded()
         } catch {
             lastError = "\(database.name): \(error.localizedDescription)"
+            refreshPendingCount()
         }
     }
 

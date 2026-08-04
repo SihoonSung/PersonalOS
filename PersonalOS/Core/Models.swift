@@ -3,7 +3,8 @@ import SwiftData
 
 // MARK: - PersonalOS Core Data Model
 //
-// Notion-style flexible database:
+// Flexible, Notion-like database engine. Storage is local (SwiftData +
+// CloudKit); Notion two-way sync is an opt-in layer enabled per database:
 //   POSDatabase (a user-defined database, e.g. "가계부")
 //     └─ POSProperty (column definition: 금액, 카테고리, ...)
 //     └─ POSEntry (a row)
@@ -180,6 +181,19 @@ final class POSEntry {
     var createdAt: Date = Date.now
     var updatedAt: Date = Date.now
 
+    // MARK: Import provenance
+    //
+    // Filled in when the entry was created by the mail importer rather than
+    // by hand. `sourceMessageID` is the RFC 5322 Message-ID of the email and
+    // is the primary dedupe key across devices.
+
+    /// "" for hand-made entries, "email" for imported ones.
+    var sourceKind: String = ""
+    /// Message-ID of the email this entry came from.
+    var sourceMessageID: String?
+    /// Which parser rule produced it, e.g. "chase.card".
+    var sourceRule: String?
+
     // MARK: Notion sync (per-entry state)
 
     /// Linked Notion page ID (nil = not yet pushed).
@@ -224,5 +238,55 @@ final class POSValue {
 
     var isEmpty: Bool {
         textValue == nil && numberValue == nil && dateValue == nil && boolValue == nil
+    }
+}
+
+// MARK: - Balance anchor
+
+/// A "the account really held this much at this moment" snapshot.
+///
+/// The app can't read the bank balance, so the user types it once and every
+/// transaction dated after `recordedAt` is applied on top. Typing a fresh
+/// anchor whenever the number drifts re-syncs it — old anchors are kept so
+/// the history stays auditable.
+@Model
+final class POSBalanceAnchor {
+    var uuid: UUID = UUID()
+    var amount: Double = 0
+    var recordedAt: Date = Date.now
+    /// "manual" today; leaves room for a bank-email source later.
+    var source: String = "manual"
+    var note: String = ""
+
+    init(amount: Double, recordedAt: Date = .now, source: String = "manual", note: String = "") {
+        self.uuid = UUID()
+        self.amount = amount
+        self.recordedAt = recordedAt
+        self.source = source
+        self.note = note
+    }
+}
+
+// MARK: - Merchant rule (learned category mapping)
+
+/// User-taught mapping "if the raw merchant string contains X, file it under Y".
+/// Checked before the built-in keyword table, newest first.
+@Model
+final class POSMerchantRule {
+    var uuid: UUID = UUID()
+    /// Uppercased substring matched against the raw merchant description.
+    var pattern: String = ""
+    /// Category name written into the 카테고리 property.
+    var category: String = ""
+    /// Optional prettier title to use instead of the cleaned merchant string.
+    var displayName: String = ""
+    var createdAt: Date = Date.now
+
+    init(pattern: String, category: String, displayName: String = "") {
+        self.uuid = UUID()
+        self.pattern = pattern.uppercased()
+        self.category = category
+        self.displayName = displayName
+        self.createdAt = .now
     }
 }

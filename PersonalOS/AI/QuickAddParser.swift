@@ -49,7 +49,7 @@ enum QuickAddParser {
 
         // --- Budget heuristics: 수입/지출 분류
         if database.templateKey == TemplateKey.budget,
-           let kindProp = properties.first(where: { $0.name == "분류" }),
+           let kindProp = properties.first(where: { $0.name == "유형" || $0.name == "분류" }),
            result.texts[kindProp.name] == nil {
             let incomeWords = ["월급", "급여", "입금", "받", "수입", "환급"]
             let isIncome = incomeWords.contains { input.contains($0) }
