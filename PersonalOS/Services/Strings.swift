@@ -34,6 +34,19 @@ struct L {
     static var greetingEvening:   String { s("좋은 저녁이에요", "Good evening") }
     static var greetingNight:     String { s("늦은 시간이네요", "Late night") }
     static var focusNow:          String { s("지금 집중할 일", "Focus Now") }
+
+    // MARK: - Glass Dashboard
+    static var dashTodayTitle:  String { s("오늘", "Today") }
+    static func dashDoneCount(_ done: Int, _ total: Int) -> String { s("\(done)/\(total) 완료", "\(done)/\(total) done") }
+    static var dashAllClear:    String { s("오늘 할 일을 모두 끝냈어요", "All done for today") }
+    static var dashNoTasks:     String { s("오늘은 등록된 할 일이 없어요", "Nothing scheduled today") }
+    static func dashMoreTasks(_ n: Int) -> String { s("외 \(n)개", "+\(n) more") }
+    static var dashBudgetTitle: String { s("예산", "Budget") }
+    static func dashBudgetUsed(_ pct: Int) -> String { s("\(pct)% 사용", "\(pct)% used") }
+    static func dashBudgetOver(_ amount: String) -> String { s("\(amount) 초과", "\(amount) over") }
+    static var dashTodaySpent:  String { s("오늘 지출", "Spent today") }
+    static var dashMonthSpent:  String { s("이번 달 지출", "Spent this month") }
+    static func dashWeekSpent(_ amount: String) -> String { s("이번 주 \(amount)", "This week \(amount)") }
     static var overdueBadge:      String { s("연체", "Overdue") }
 
     // MARK: - Task Summary Card
@@ -148,10 +161,6 @@ struct L {
     static var priorityLow:    String { s("낮음", "Low") }
     static var priorityMedium: String { s("보통", "Medium") }
     static var priorityHigh:   String { s("높음", "High") }
-
-    static func priorityLabel(_ p: Int) -> String {
-        Priority(rawValue: p)?.label ?? ""
-    }
 
     // MARK: - Repeat Rules
     static var repeatNone:    String { s("없음", "None") }

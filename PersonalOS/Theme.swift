@@ -1,21 +1,33 @@
 import SwiftUI
 
 enum Theme {
-    // MARK: - Colors
+    // MARK: - Colors (cross-platform: iOS/visionOS use UIKit, macOS uses AppKit)
     static let accent = Color("AccentColor")
-    static let background = Color(.systemBackground)
-    static let secondaryBackground = Color(.secondarySystemBackground)
-    static let groupedBackground = Color(.systemGroupedBackground)
 
-    static let expenseRed = Color(.systemRed)
+    #if os(macOS)
+    static let background = Color(nsColor: .windowBackgroundColor)
+    static let secondaryBackground = Color(nsColor: .controlBackgroundColor)
+    static let groupedBackground = Color(nsColor: .windowBackgroundColor)
+    static let neutralGray = Color(nsColor: .secondaryLabelColor)
+    static let expenseRed = Color(nsColor: .systemRed)
+    static let negativeRed = Color(nsColor: .systemRed)
+    static let priorityHigh = Color(nsColor: .systemRed)
+    static let priorityMedium = Color(nsColor: .systemOrange)
+    static let priorityLow = Color(nsColor: .systemBlue)
+    #else
+    static let background = Color(uiColor: .systemBackground)
+    static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
+    static let groupedBackground = Color(uiColor: .systemGroupedBackground)
+    static let neutralGray = Color(uiColor: .secondaryLabel)
+    static let expenseRed = Color(uiColor: .systemRed)
+    static let negativeRed = Color(uiColor: .systemRed)
+    static let priorityHigh = Color(uiColor: .systemRed)
+    static let priorityMedium = Color(uiColor: .systemOrange)
+    static let priorityLow = Color(uiColor: .systemBlue)
+    #endif
+
     static let incomeGreen = Color(red: 0.2, green: 0.78, blue: 0.35)
     static let positiveGreen = Color(red: 0.2, green: 0.78, blue: 0.35)
-    static let negativeRed = Color(.systemRed)
-    static let neutralGray = Color(.secondaryLabel)
-
-    static let priorityHigh = Color(.systemRed)
-    static let priorityMedium = Color(.systemOrange)
-    static let priorityLow = Color(.systemBlue)
 
     // MARK: - Typography
     static func largeTitle() -> Font { .largeTitle.bold() }
@@ -55,20 +67,20 @@ extension View {
     func cardStyle() -> some View {
         modifier(CardModifier())
     }
+
+    /// Liquid Glass 카드 — 대시보드 전용
+    func glassCardStyle(cornerRadius: CGFloat = Theme.radiusXL, interactive: Bool = false) -> some View {
+        self
+            .padding(Theme.spacingM)
+            .glassEffect(
+                interactive ? .regular.interactive() : .regular,
+                in: .rect(cornerRadius: cornerRadius)
+            )
+    }
 }
 
-// MARK: - Amount Formatting
-
-extension Double {
-    func formattedKRW() -> String {
-        Currency.krw.format(self)
-    }
-
-    func formattedUSD() -> String {
-        Currency.usd.format(self)
-    }
-
-    func formattedAmount(currency: String = "KRW") -> String {
-        currency == "USD" ? formattedUSD() : formattedKRW()
-    }
+extension Theme {
+    /// 글래스 대시보드 — 게이지/차트용 절제된 잉크 컬러 (모노크롬)
+    static let glassInk = Color.primary
+    static let glassTrack = Color.primary.opacity(0.08)
 }
