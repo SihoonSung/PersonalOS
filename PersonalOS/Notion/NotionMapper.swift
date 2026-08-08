@@ -259,7 +259,7 @@ enum NotionMapper {
         switch property.type {
         case .text:
             let text = entry.text(for: property) ?? ""
-            return ["rich_text": text.isEmpty ? [] : [["text": ["content": text]]]]
+            return ["rich_text": richText(text)]
 
         case .number:
             if let n = entry.number(for: property) {
@@ -296,6 +296,22 @@ enum NotionMapper {
             }
             return ["url": NSNull()]
         }
+    }
+
+    /// 노션 rich_text 는 **객체 하나당 2000자**가 한계다. 설교 노트처럼 긴 글을
+    /// 한 덩어리로 보내면 검증 오류가 나면서 그 항목의 동기화가 통째로 실패한다.
+    /// 잘라서 여러 객체로 보내면 노션에서는 이어진 한 문단으로 보인다.
+    private static func richText(_ text: String) -> [[String: Any]] {
+        guard !text.isEmpty else { return [] }
+        let limit = 2000
+        var chunks: [[String: Any]] = []
+        var index = text.startIndex
+        while index < text.endIndex {
+            let end = text.index(index, offsetBy: limit, limitedBy: text.endIndex) ?? text.endIndex
+            chunks.append(["text": ["content": String(text[index..<end])]])
+            index = end
+        }
+        return chunks
     }
 
     // MARK: - Notion → Local (apply page)

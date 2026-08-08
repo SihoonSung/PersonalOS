@@ -135,7 +135,7 @@ struct MailSettingsView: View {
                     Text("이미 가져온 거래는 메일 고유 ID로 걸러져서 다시 가져와도 중복되지 않아요.")
                 }
             }
-            .formStyle(.grouped)
+            .posForm()
             .navigationTitle("메일 가계부")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

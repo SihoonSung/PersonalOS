@@ -9,6 +9,10 @@ python3 parser_check.py      # Chase 파서 18케이스 + htmlToText
 python3 balance_check.py     # 잔액 계산, 앵커 경계
 python3 echo_check.py        # 중복 입금 병합
 python3 recurring_check.py   # 정기결제 감지 임계값
+python3 muscle_load_check.py # 근육 부하 계산
+python3 bible_ref_check.py   # 성경 구절 파싱
+python3 receipt_parse_check.py # 스크린샷 OCR 파싱
+python3 budget_uplift_check.py # 받은 정산만큼 예산 올리기
 ```
 
 Swift 쪽 로직을 고치면 **여기 먼저 반영해서 돌려보고** 기존 케이스가
@@ -23,3 +27,12 @@ Swift 쪽 로직을 고치면 **여기 먼저 반영해서 돌려보고** 기존
 | `balance_check.py` | `Core/BalanceService.swift`, `Core/Templates.swift`(EntryKind) |
 | `echo_check.py` | `Mail/MailSyncService.swift` (`isEcho`) |
 | `recurring_check.py` | `Core/RecurringDetector.swift` |
+| `muscle_load_check.py` | `Workout/MuscleLoad.swift` |
+| `bible_ref_check.py` | `Core/BibleReference.swift` |
+| `receipt_parse_check.py` | `Capture/ReceiptScan.swift` (`ReceiptTextParser`) |
+| `budget_uplift_check.py` | `Core/BudgetMath.swift` |
+
+`receipt_parse_check.py` 의 "실물 Chase Zelle 확인 화면" 케이스는 진짜
+스크린샷(IMG_0751)에서 온 줄들이다 — **손대지 말 것.** 나머지 케이스는
+Venmo·영수증 등 아직 실물을 못 받아서 그럴듯하게 짜둔 것이라, 실제 화면을
+확보하면 교체하면 된다.

@@ -87,7 +87,7 @@ struct BalanceEditorView: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .posForm()
             .navigationTitle("잔액 기준점")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

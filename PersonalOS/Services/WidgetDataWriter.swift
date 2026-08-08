@@ -58,13 +58,17 @@ enum WidgetDataWriter {
                 guard calendar.isDate(date, equalTo: .now, toGranularity: .month) else { return partial }
                 return partial + (amountProp.flatMap { entry.number(for: $0) } ?? 0)
             }
-            let monthlyBudget = UserDefaults.standard.double(forKey: "monthlyBudget")
+            // 받은 정산만큼 올린 실효 예산 — 앱 화면과 같은 계산을 써야
+            // 위젯과 앱의 "남은 예산"이 어긋나지 않는다.
+            let effectiveBudget = BudgetMath.effective(
+                base: BudgetMath.base, database: budget, month: .now, calendar: calendar
+            )
             snapshot.monthSpentText = budget.formattedAmount(spent)
-            if monthlyBudget > 0 {
+            if effectiveBudget > 0 {
                 snapshot.budgetSet = true
-                snapshot.remainingText = budget.formattedAmount(monthlyBudget - spent)
-                snapshot.budgetProgress = min(spent / monthlyBudget, 1.0)
-                snapshot.overBudget = spent > monthlyBudget
+                snapshot.remainingText = budget.formattedAmount(effectiveBudget - spent)
+                snapshot.budgetProgress = min(spent / effectiveBudget, 1.0)
+                snapshot.overBudget = spent > effectiveBudget
             }
 
             // ── 잔액 · 고정지출 ──

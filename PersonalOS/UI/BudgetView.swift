@@ -16,9 +16,7 @@ struct BudgetView: View {
 
     @State private var monthAnchor: Date = .now
     @AppStorage("monthlyBudget") private var monthlyBudget: Double = 0
-    @State private var showingBudgetEditor = false
-    @State private var budgetInput = ""
-    @State private var showingBalanceEditor = false
+    @AppStorage(AmountPrivacy.key) private var hideAmounts = false
 
     private var calendar: Calendar { .current }
 
@@ -58,6 +56,16 @@ struct BudgetView: View {
     }
 
     private var monthTotal: Double { monthItems.map(\.amount).reduce(0, +) }
+
+    /// 이번 달 받은 정산 — 예산을 그만큼 올려준다. BudgetMath.swift 설명 참고.
+    private var settledIn: Double {
+        BudgetMath.settledIn(in: database, month: monthAnchor, calendar: calendar)
+    }
+
+    /// 화면에 보이는 모든 예산 숫자는 이걸 쓴다 (설정값 + 받은 정산).
+    private var effectiveBudget: Double {
+        BudgetMath.effective(base: monthlyBudget, database: database, month: monthAnchor, calendar: calendar)
+    }
 
     /// 실제 수입만 — 정산금은 잔액에는 반영되지만 여기엔 안 잡힌다.
     private var monthIncome: Double {
@@ -196,25 +204,6 @@ struct BudgetView: View {
                 searchResults
             }
         }
-        .alert("월 예산 설정", isPresented: $showingBudgetEditor) {
-            TextField("예: 3000", text: $budgetInput)
-                #if os(iOS)
-                .keyboardType(.decimalPad)
-                #endif
-            Button("저장") {
-                monthlyBudget = Double(budgetInput.replacingOccurrences(of: ",", with: "")) ?? 0
-                budgetInput = ""
-            }
-            if monthlyBudget > 0 {
-                Button("예산 해제", role: .destructive) { monthlyBudget = 0 }
-            }
-            Button("취소", role: .cancel) { budgetInput = "" }
-        } message: {
-            Text("한 달 지출 목표를 정하면 남은 예산과 사용률을 보여줘요.")
-        }
-        .sheet(isPresented: $showingBalanceEditor) {
-            BalanceEditorView(database: database)
-        }
     }
 
     private var dashboard: some View {
@@ -237,7 +226,7 @@ struct BudgetView: View {
                         }
                     }
                 }
-                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                .posRow()
             }
 
             Section {
@@ -246,20 +235,20 @@ struct BudgetView: View {
                 heroSummary
                 budgetRow
             }
-            .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+            .posRow()
 
             if dailyTotals.count > 1 {
                 Section {
                     dailyChart
                 }
-                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                .posRow()
             }
 
             if trend.contains(where: { $0.total > 0 }) {
                 Section {
                     trendChart
                 }
-                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                .posRow()
             }
 
             if !categoryTotals.isEmpty {
@@ -267,14 +256,14 @@ struct BudgetView: View {
                     categoryChart
                     categoryBars
                 }
-                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                .posRow()
             }
 
             if !monthItems.isEmpty {
                 Section {
                     insightsGrid
                 }
-                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                .posRow()
             }
 
             if dayGroups.isEmpty {
@@ -284,7 +273,7 @@ struct BudgetView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                 }
-                .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                .posRow()
             }
 
             ForEach(dayGroups, id: \.day) { group in
@@ -301,12 +290,7 @@ struct BudgetView: View {
                 }
             }
         }
-        #if os(macOS)
-        .listStyle(.inset)
-        #else
-        .listStyle(.insetGrouped)
-        #endif
-        .scrollContentBackground(.hidden)
+        .posList()
     }
 
     // MARK: Month navigation
@@ -432,10 +416,7 @@ struct BudgetView: View {
     @ViewBuilder
     private var balanceRow: some View {
         if let balance {
-            Button {
-                showingBalanceEditor = true
-            } label: {
-                HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("남은 돈")
                             .font(.caption.bold())
@@ -444,23 +425,19 @@ struct BudgetView: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
-                    Spacer()
-                    Text(fmt(balance.current))
-                        .font(.system(.title3, design: .rounded).weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(balance.current < 0 ? Theme.negativeRed : Color.primary)
-                }
+                Spacer()
+                Text(AmountPrivacy.text(fmt(balance.current), hidden: hideAmounts))
+                    .font(.system(.title3, design: .rounded).weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(hideAmounts ? Color.secondary
+                                     : (balance.current < 0 ? Theme.negativeRed : Color.primary))
             }
-            .buttonStyle(.plain)
             .padding(.vertical, 2)
         } else {
-            Button {
-                showingBalanceEditor = true
-            } label: {
-                Label("계좌 잔액 설정", systemImage: "banknote")
-                    .font(.subheadline)
-            }
-            .buttonStyle(.borderless)
+            // 잔액 기준점은 설정 탭에서 정한다.
+            Text("설정에서 계좌 잔액 기준점을 정하면 남은 돈이 여기에 나와요")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -469,8 +446,9 @@ struct BudgetView: View {
     @ViewBuilder
     private var budgetRow: some View {
         if monthlyBudget > 0 {
-            let progress = min(monthTotal / monthlyBudget, 1.0)
-            let over = monthTotal > monthlyBudget
+            let budget = effectiveBudget
+            let progress = min(monthTotal / budget, 1.0)
+            let over = monthTotal > budget
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("예산")
@@ -478,8 +456,8 @@ struct BudgetView: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     Text(over
-                         ? "\(fmt(monthTotal - monthlyBudget)) 초과"
-                         : "\(fmt(monthlyBudget - monthTotal)) 남음")
+                         ? "\(fmt(monthTotal - budget)) 초과"
+                         : "\(fmt(budget - monthTotal)) 남음")
                         .font(.caption.bold())
                         .foregroundStyle(over ? .orange : .secondary)
                         .monospacedDigit()
@@ -496,22 +474,22 @@ struct BudgetView: View {
                 }
                 .frame(height: 5)
 
-                Text("예산 \(fmt(monthlyBudget)) 중 \(Int((monthTotal / monthlyBudget * 100).rounded()))% 사용")
+                // 예산이 올라간 이유를 숨기지 않는다 — 숫자가 갑자기 늘면
+                // 왜 늘었는지 바로 보여야 믿을 수 있다.
+                Text(settledIn > 0
+                     ? "예산 \(fmt(monthlyBudget)) + 받은 정산 \(fmt(settledIn)) = \(fmt(budget)) 중 \(Int((monthTotal / budget * 100).rounded()))% 사용"
+                     : "예산 \(fmt(budget)) 중 \(Int((monthTotal / budget * 100).rounded()))% 사용")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, 4)
-            .contentShape(Rectangle())
-            .onTapGesture { showingBudgetEditor = true }
         } else {
-            Button {
-                showingBudgetEditor = true
-            } label: {
-                Label("월 예산 설정", systemImage: "target")
-                    .font(.subheadline)
-            }
-            .buttonStyle(.borderless)
+            // 예산 설정은 설정 탭에 있다 — 화면마다 설정이 흩어지지 않게.
+            Text("설정에서 월 예산을 정하면 남은 예산과 사용률이 여기에 나와요")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -747,7 +725,7 @@ struct BudgetView: View {
             Button("편집") { editingEntry = item.entry }
             Button("삭제", role: .destructive) { delete(item.entry) }
         }
-        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+        .posRow()
     }
 
     @ViewBuilder

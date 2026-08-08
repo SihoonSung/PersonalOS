@@ -71,12 +71,25 @@ final class MailSyncService {
 
             let since = Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .now
             var found = 0
+            // 검색 실패를 삼키면 "0통"과 구분이 안 된다 — 실제로 이것 때문에
+            // 발신자 조건이 틀린 걸 한참 못 찾았다.
+            var searchError: String?
             for source in MailSource.allCases where MailSettings.isEnabled(source.id) {
                 for sender in source.searchSenders {
-                    found += (try? await client.searchUIDs(from: sender, since: since))?.count ?? 0
+                    do {
+                        found += try await client.searchUIDs(from: sender, since: since).count
+                    } catch {
+                        searchError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    }
                 }
             }
             await client.logout()
+            if let searchError {
+                return "로그인은 됐지만 메일 검색이 실패했어요 — \(searchError)"
+            }
+            if found == 0 {
+                return "연결 성공 — 그런데 \(mailbox)에서 최근 2주 알림을 한 통도 못 찾았어요. 메일박스가 맞는지 확인해 주세요."
+            }
             return "연결 성공 — \(mailbox)에서 최근 2주 알림 \(found)통을 찾았어요."
         } catch {
             client.disconnect()

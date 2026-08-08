@@ -8,6 +8,7 @@ struct BalanceCard: View {
     var onOpen: () -> Void = {}
 
     @State private var showingEditor = false
+    @AppStorage(AmountPrivacy.key) private var hideAmounts = false
 
     private var snapshot: BalanceSnapshot? {
         BalanceService.snapshot(database: database, context: context)
@@ -34,23 +35,25 @@ struct BalanceCard: View {
                     .font(Theme.caption().bold())
                     .foregroundStyle(.secondary)
                 Spacer()
+                // 남 앞에서 앱을 열 때를 위한 스위치. 설정의 "금액 가리기"와 같은 값.
                 Button {
-                    showingEditor = true
+                    withAnimation(.snappy) { hideAmounts.toggle() }
                 } label: {
-                    Image(systemName: "slider.horizontal.3")
+                    Image(systemName: hideAmounts ? "eye.slash" : "eye")
                         .font(.caption)
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
             }
 
-            Text(database.formattedAmount(snapshot.current))
+            Text(AmountPrivacy.text(database.formattedAmount(snapshot.current), hidden: hideAmounts))
                 .font(.system(.largeTitle, design: .rounded).weight(.semibold))
                 .monospacedDigit()
                 .contentTransition(.numericText())
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .foregroundStyle(snapshot.current < 0 ? Theme.negativeRed : Color.primary)
+                .foregroundStyle(hideAmounts ? Color.secondary
+                                 : (snapshot.current < 0 ? Theme.negativeRed : Color.primary))
 
             HStack(spacing: Theme.spacingM) {
                 delta("나감", snapshot.spentSinceAnchor, Theme.expenseRed)
@@ -72,7 +75,7 @@ struct BalanceCard: View {
             Text(label)
                 .font(Theme.caption2())
                 .foregroundStyle(.secondary)
-            Text(database.formattedAmount(value))
+            Text(AmountPrivacy.text(database.formattedAmount(value), hidden: hideAmounts))
                 .font(Theme.caption().weight(.medium))
                 .monospacedDigit()
         }

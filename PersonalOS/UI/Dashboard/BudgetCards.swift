@@ -12,8 +12,7 @@ struct BudgetSummaryCard: View {
     var onOpen: () -> Void = {}
 
     @AppStorage("monthlyBudget") private var monthlyBudget: Double = 0
-    @State private var showingBudgetEditor = false
-    @State private var budgetInput = ""
+    @AppStorage(AmountPrivacy.key) private var hideAmounts = false
 
     private var calendar: Calendar { .current }
 
@@ -28,15 +27,21 @@ struct BudgetSummaryCard: View {
         }
     }
 
-    private var progress: Double {
-        guard monthlyBudget > 0 else { return 0 }
-        return min(monthSpend / monthlyBudget, 1.0)
+    /// 설정값 + 이번 달 받은 정산. BudgetMath.swift 설명 참고.
+    private var effectiveBudget: Double {
+        BudgetMath.effective(base: monthlyBudget, database: database, month: .now, calendar: calendar)
     }
 
-    private var isOver: Bool { monthlyBudget > 0 && monthSpend > monthlyBudget }
+    private var progress: Double {
+        guard effectiveBudget > 0 else { return 0 }
+        return min(monthSpend / effectiveBudget, 1.0)
+    }
+
+    private var isOver: Bool { effectiveBudget > 0 && monthSpend > effectiveBudget }
 
     var body: some View {
         let spend = monthSpend
+        let budget = effectiveBudget
 
         VStack(alignment: .leading, spacing: Theme.spacingS) {
             HStack {
@@ -52,16 +57,16 @@ struct BudgetSummaryCard: View {
                 .buttonStyle(.plain)
             }
 
-            Text(database.formattedAmount(monthlyBudget > 0 ? monthlyBudget - spend : spend))
+            Text(database.formattedAmount(budget > 0 ? budget - spend : spend))
                 .font(.title3.bold())
-                .foregroundStyle(monthlyBudget > 0 && spend > monthlyBudget ? Theme.expenseRed : Color.primary)
+                .foregroundStyle(budget > 0 && spend > budget ? Theme.expenseRed : Color.primary)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
-            if monthlyBudget > 0 {
+            if budget > 0 {
                 if isOver {
-                    Text(L.dashBudgetOver(database.formattedAmount(spend - monthlyBudget)))
+                    Text(L.dashBudgetOver(database.formattedAmount(spend - budget)))
                         .font(Theme.caption2().bold())
                         .foregroundStyle(.orange)
                 } else {
@@ -86,40 +91,13 @@ struct BudgetSummaryCard: View {
                     .font(Theme.caption2())
                     .foregroundStyle(.secondary)
 
-                Button {
-                    showingBudgetEditor = true
-                } label: {
-                    Text("예산 설정하기")
-                        .font(Theme.caption2().bold())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Theme.glassTrack, in: Capsule())
-                }
-                .buttonStyle(.plain)
+                Text("설정에서 월 예산을 정할 수 있어요")
+                    .font(Theme.caption2())
+                    .foregroundStyle(.tertiary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCardStyle()
-        .onTapGesture {
-            if monthlyBudget <= 0 { showingBudgetEditor = true }
-        }
-        .alert("월 예산 설정", isPresented: $showingBudgetEditor) {
-            TextField("예: 3000", text: $budgetInput)
-                #if os(iOS)
-                .keyboardType(.decimalPad)
-                #endif
-            Button("저장") {
-                monthlyBudget = Double(budgetInput.replacingOccurrences(of: ",", with: "")) ?? 0
-                budgetInput = ""
-            }
-            if monthlyBudget > 0 {
-                Button("예산 해제", role: .destructive) { monthlyBudget = 0 }
-            }
-            Button("취소", role: .cancel) { budgetInput = "" }
-        } message: {
-            Text("한 달 지출 목표를 정하면 남은 예산과 사용률을 보여줘요.")
-        }
     }
 }
 

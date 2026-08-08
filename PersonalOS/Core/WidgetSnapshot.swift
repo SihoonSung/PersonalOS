@@ -1,17 +1,5 @@
 import Foundation
 
-/// 앱 ↔ 위젯 공유 상수/모델. 위젯 타깃에도 이 파일을 멤버로 추가할 것.
-enum WidgetShared {
-    static let appGroupID = "group.com.calebsung.PersonalOS"
-    static let snapshotFilename = "widget-snapshot.json"
-
-    static var snapshotURL: URL? {
-        FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
-            .appendingPathComponent(snapshotFilename)
-    }
-}
-
 struct WidgetSnapshot: Codable {
     struct Task: Codable, Identifiable {
         var id: String

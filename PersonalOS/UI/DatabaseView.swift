@@ -50,6 +50,11 @@ struct DatabaseView: View {
                         Label("Notion 동기화", systemImage: "arrow.triangle.2.circlepath")
                     }
                 }
+                #if canImport(PhotosUI) && os(iOS)
+                if database.templateKey == TemplateKey.budget {
+                    CapturePickerButton(database: database)
+                }
+                #endif
                 if database.templateKey == TemplateKey.budget && MailSettings.isConfigured {
                     Button {
                         Task { await MailSyncService.shared.syncNow() }
@@ -103,6 +108,8 @@ struct DatabaseView: View {
             switch database.templateKey {
             case TemplateKey.budget:
                 BudgetView(database: database, searchText: searchText, editingEntry: $editingEntry)
+            case TemplateKey.sermon:
+                SermonListView(database: database, searchText: searchText, editingEntry: $editingEntry)
             case TemplateKey.todo:
                 TodoView(database: database, searchText: searchText, editingEntry: $editingEntry)
             default:
@@ -130,17 +137,14 @@ struct DatabaseView: View {
                 EntryRowView(entry: entry, database: database)
                     .contentShape(Rectangle())
                     .onTapGesture { editingEntry = entry }
-                    .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                    .posRow()
             }
             .onDelete { offsets in
                 let items = filteredEntries
                 for i in offsets { delete(items[i]) }
             }
         }
-        #if os(iOS)
-        .listStyle(.insetGrouped)
-        #endif
-        .scrollContentBackground(.hidden)
+        .posList()
     }
 
     #if os(macOS)

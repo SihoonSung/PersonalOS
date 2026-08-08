@@ -123,16 +123,11 @@ struct TodoView: View {
                             .foregroundStyle(.secondary)
                             .badge(completed.count)
                     }
-                    .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                    .posRow()
                 }
             }
         }
-        #if os(macOS)
-        .listStyle(.inset)
-        #else
-        .listStyle(.insetGrouped)
-        #endif
-        .scrollContentBackground(.hidden)
+        .posList()
     }
 
     // MARK: Row
@@ -178,7 +173,7 @@ struct TodoView: View {
             Button("편집") { editingEntry = item.entry }
             Button("삭제", role: .destructive) { delete(item.entry) }
         }
-        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+        .posRow()
     }
 
     private func priorityColor(_ priority: String?) -> Color? {

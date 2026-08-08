@@ -18,6 +18,9 @@ struct PersonalOSApp: App {
             POSValue.self,
             POSMerchantRule.self,
             POSBalanceAnchor.self,
+            POSWorkoutSession.self,
+            POSWorkoutSet.self,
+            POSOneRepMax.self,
         ])
 
         // Try CloudKit-backed store first; fall back to local-only so the app

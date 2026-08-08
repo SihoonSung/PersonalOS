@@ -46,7 +46,7 @@ struct EntryDetailView: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .posForm()
             .navigationTitle(entry.title.isEmpty ? "새 항목" : entry.title)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -91,12 +91,14 @@ struct PropertyFieldView: View {
             HStack {
                 Text(property.name)
                 Spacer()
-                TextField("0", text: numberBinding)
-                    .multilineTextAlignment(.trailing)
-                    #if os(iOS)
-                    .keyboardType(.decimalPad)
-                    #endif
-                    .frame(maxWidth: 160)
+                PosNumberField(
+                    placeholder: "0",
+                    value: entry.number(for: property),
+                    allowsNegative: true
+                ) { newValue in
+                    entry.setNumber(newValue, for: property, context: context)
+                }
+                .frame(maxWidth: 160)
                 if property.config.numberFormat == .currency {
                     Text(property.config.currencyCode)
                         .foregroundStyle(.secondary)
@@ -185,20 +187,6 @@ struct PropertyFieldView: View {
         )
     }
 
-    private var numberBinding: Binding<String> {
-        Binding(
-            get: {
-                guard let n = entry.number(for: property) else { return "" }
-                return n.truncatingRemainder(dividingBy: 1) == 0
-                    ? String(Int(n))
-                    : String(n)
-            },
-            set: { raw in
-                entry.setNumber(Self.sanitizedDouble(raw), for: property, context: context)
-            }
-        )
-    }
-
     private var boolBinding: Binding<Bool> {
         Binding(
             get: { entry.bool(for: property) },
@@ -220,20 +208,4 @@ struct PropertyFieldView: View {
         )
     }
 
-    /// Tolerant numeric parsing: keeps digits, one decimal point, leading minus.
-    static func sanitizedDouble(_ raw: String) -> Double? {
-        var result = ""
-        var seenDot = false
-        for (i, ch) in raw.enumerated() {
-            if ch.isNumber {
-                result.append(ch)
-            } else if ch == "." && !seenDot {
-                seenDot = true
-                result.append(ch)
-            } else if ch == "-" && i == 0 {
-                result.append(ch)
-            }
-        }
-        return Double(result)
-    }
 }

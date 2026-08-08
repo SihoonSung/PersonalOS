@@ -51,6 +51,11 @@ extension POSDatabase {
         orderedProperties.first { $0.name == "결제수단" }
     }
 
+    /// 메모 — 사람이 직접 적는 한 줄. 스크린샷 기록에서 "왜 보냈는지"가 들어간다.
+    var memoProperty: POSProperty? {
+        orderedProperties.first { $0.name == "메모" && $0.type == .text }
+    }
+
     /// 출처 이메일 — raw merchant / sender string kept for auditing.
     var sourceProperty: POSProperty? {
         orderedProperties.first { $0.name == "출처 이메일" }

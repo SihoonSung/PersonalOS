@@ -109,7 +109,7 @@ struct ReviewQueueView: View {
         .swipeActions(edge: .leading) {
             Button("확인") { confirm(entry) }.tint(.green)
         }
-        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+        .posRow()
     }
 
     /// 유형은 잔액 부호를 결정하니까 검토 화면에서 제일 먼저 손볼 수 있어야 한다.
@@ -220,7 +220,7 @@ private struct TeachRuleSheet: View {
                     Text("원본: \(rawSource)\n앞으로 이 문구가 들어간 거래는 \(category)(으)로 자동 분류돼요.")
                 }
             }
-            .formStyle(.grouped)
+            .posForm()
             .navigationTitle("이 가게 기억하기")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -6,46 +6,6 @@ import SwiftData
 // 가계부 / 할 일 are just databases on the generic engine.
 // `templateKey` lets quick-add & MCP find them even after renaming.
 
-enum TemplateKey {
-    static let budget = "budget"
-    static let todo = "todo"
-    static let bodyLog = "bodylog"
-    static let expressions = "expressions"
-    static let workout = "workout"
-}
-
-/// 가계부 "유형" 값.
-///
-/// 네 값 각각이 두 가지를 **혼자서** 결정한다: 잔액에 더할지 뺄지, 그리고
-/// 월 지출/수입 통계에 낄지. 방향이 애매한 "이체" 하나로 두면 Zelle 정산금이
-/// 들어온 건지 나간 건지 알 수 없어서 잔액을 계산할 수 없다.
-enum EntryKind {
-    /// 잔액 −, 지출 통계 O
-    static let expense = "지출"
-    /// 잔액 +, 수입 통계 O — 급여처럼 실제로 번 돈
-    static let income = "수입"
-    /// 잔액 +, 통계 X — 룸메 정산처럼 대신 낸 돈을 돌려받는 것
-    static let settleIn = "받은 정산"
-    /// 잔액 −, 통계 X — 남에게 정산해서 돌려주는 것
-    static let settleOut = "보낸 정산"
-
-    static let all = [expense, income, settleIn, settleOut]
-
-    /// 잔액에 반영할 부호. 모르는 값은 지출로 본다(기존 데이터 안전장치).
-    static func sign(_ kind: String) -> Double {
-        switch kind {
-        case income, settleIn: return 1
-        default: return -1
-        }
-    }
-
-    static func countsAsSpending(_ kind: String) -> Bool { kind == expense }
-    static func countsAsIncome(_ kind: String) -> Bool { kind == income }
-
-    /// 예전 스키마의 "이체" — 실제로 쓰인 건 Zelle 입금뿐이라 받은 정산으로 옮긴다.
-    static let legacyTransfer = "이체"
-}
-
 enum Templates {
 
     static let budgetCategories = [
@@ -87,6 +47,8 @@ enum Templates {
         var kind = PropertyConfig.empty
         kind.selectOptions = EntryKind.all
         ensure("유형", .select, kind)
+        // 스크린샷으로 기록할 때 "왜 보냈는지"를 적는 칸. 메일 수집은 안 쓴다.
+        ensure("메모", .text, .empty)
         ensure("출처 이메일", .text, .empty)
         ensure("확인됨", .checkbox, .empty)
 
@@ -135,8 +97,9 @@ enum Templates {
             POSProperty(name: "날짜", type: .date, sortIndex: 2),
             POSProperty(name: "유형", type: .select, sortIndex: 3, config: kind),
             POSProperty(name: "결제수단", type: .text, sortIndex: 4),
-            POSProperty(name: "출처 이메일", type: .text, sortIndex: 5),
-            POSProperty(name: "확인됨", type: .checkbox, sortIndex: 6),
+            POSProperty(name: "메모", type: .text, sortIndex: 5),
+            POSProperty(name: "출처 이메일", type: .text, sortIndex: 6),
+            POSProperty(name: "확인됨", type: .checkbox, sortIndex: 7),
         ]
         return db
     }
@@ -226,6 +189,20 @@ enum Templates {
             POSProperty(name: "상태", type: .select, sortIndex: 0, config: status),
             POSProperty(name: "마감", type: .date, sortIndex: 1),
             POSProperty(name: "Pillar", type: .select, sortIndex: 2, config: pillar),
+        ]
+        return db
+    }
+
+    /// 말씀(설교) 기록 — 주일마다 한 편.
+    static func makeSermon(sortIndex: Int) -> POSDatabase {
+        let db = POSDatabase(name: "말씀 기록", icon: "📖", sortIndex: sortIndex, templateKey: TemplateKey.sermon)
+        db.properties = [
+            POSProperty(name: "날짜", type: .date, sortIndex: 0),
+            POSProperty(name: "본문", type: .text, sortIndex: 1),
+            POSProperty(name: "설교자", type: .text, sortIndex: 2),
+            POSProperty(name: "노트", type: .text, sortIndex: 3),
+            POSProperty(name: "은혜 구절", type: .text, sortIndex: 4),
+            POSProperty(name: "적용", type: .text, sortIndex: 5),
         ]
         return db
     }

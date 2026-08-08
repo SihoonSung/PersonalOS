@@ -46,13 +46,18 @@ enum MailSource: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Values handed to IMAP `SEARCH FROM`, which matches on a substring of
-    /// the From header. Narrow enough to skip the marketing mail, wide enough
-    /// to survive a change of subdomain.
+    /// Values handed to IMAP `SEARCH FROM`.
+    ///
+    /// **도메인으로만 검색한다.** RFC 3501 의 SEARCH FROM 은 헤더 부분일치지만
+    /// Gmail 은 이걸 자기 검색 엔진으로 처리해서 **주소를 통째로 맞춰야** 한다.
+    /// 실제로 `alerts@chase.com` 으로 찾으면 0통이 나오고
+    /// `no.reply.alerts@chase.com` 으로는 다 나온다 — 앞의 것이 뒤의 것의
+    /// 부분문자열인데도. 발신 주소가 바뀌어도 견디도록 도메인을 쓴다.
+    /// 가져온 뒤 `senderDomains` 로 한 번 더 거르므로 넓게 잡아도 안전하다.
     var searchSenders: [String] {
         switch self {
-        case .chase: return ["alerts@chase.com"]
-        case .apple: return ["no_reply@email.apple.com"]
+        case .chase: return ["chase.com"]
+        case .apple: return ["email.apple.com"]
         }
     }
 

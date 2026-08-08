@@ -46,7 +46,7 @@ struct SchemaEditorView: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .posForm()
             .navigationTitle("속성 편집")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -149,7 +149,7 @@ struct PropertyEditorView: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .posForm()
             .navigationTitle("속성 설정")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

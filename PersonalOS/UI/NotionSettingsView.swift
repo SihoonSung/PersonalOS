@@ -22,7 +22,7 @@ struct NotionSettingsView: View {
                 databasesSection
                 syncSection
             }
-            .formStyle(.grouped)
+            .posForm()
             .navigationTitle("Notion 동기화")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -178,7 +178,7 @@ struct NotionLinkView: View {
                 controlSection
             }
         }
-        .formStyle(.grouped)
+        .posForm()
         .navigationTitle(database.name)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

@@ -31,7 +31,7 @@ struct RecurringView: View {
                     Section {
                         summary(active)
                     }
-                    .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                    .posRow()
 
                     if !active.isEmpty {
                         Section("다음 결제") {
@@ -39,7 +39,7 @@ struct RecurringView: View {
                                 row(charge)
                             }
                         }
-                        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                        .posRow()
                     }
 
                     if !dormant.isEmpty {
@@ -52,7 +52,7 @@ struct RecurringView: View {
                         } footer: {
                             Text("주기가 두 번 넘게 지나도록 결제가 없었어요. 해지했다면 그대로 두면 됩니다.")
                         }
-                        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+                        .posRow()
                     }
                 }
                 .scrollContentBackground(.hidden)

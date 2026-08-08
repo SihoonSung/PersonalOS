@@ -10,6 +10,7 @@ struct DashboardView: View {
     var onOpenDatabases: () -> Void = {}
     var onOpenSettings: () -> Void = {}
     var onOpenRecurring: (POSDatabase) -> Void = { _ in }
+    var onOpenWorkout: () -> Void = {}
 
     private var todoDatabase: POSDatabase? {
         databases.first { $0.templateKey == TemplateKey.todo }
@@ -48,6 +49,8 @@ struct DashboardView: View {
             BodyLogCard(database: db, onOpen: { openDatabase(db) })
         case TemplateKey.workout:
             WorkoutCard(database: db, onOpen: { openDatabase(db) })
+        case TemplateKey.sermon:
+            SermonCard(database: db, onOpen: { openDatabase(db) })
         case TemplateKey.expressions:
             ExpressionsCard(database: db, onOpen: { openDatabase(db) })
         default:
@@ -86,6 +89,8 @@ struct DashboardView: View {
                 }
 
                 CalendarCard()
+
+                WorkoutReadyCard(onOpen: onOpenWorkout)
 
                 if !extraDatabases.isEmpty {
                     LazyVGrid(

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSExtension</key>
+	<dict>
+		<!-- 스토리보드 대신 클래스를 직접 띄운다. Xcode 템플릿이 만들어준
+		     MainInterface.storyboard 는 지워도 된다. -->
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.share-services</string>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<!-- 이미지 한 장일 때만 뜬다. 텍스트·URL 까지 받으면 공유 시트가
+			     지저분해지고 우리가 할 수 있는 것도 없다. -->
+			<key>NSExtensionActivationRule</key>
+			<dict>
+				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
+				<integer>1</integer>
+			</dict>
+		</dict>
+	</dict>
+</dict>
+</plist>

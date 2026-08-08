@@ -88,6 +88,51 @@
 `RecurringView` + `FixedCostCard` / `Dashboard/BalanceCard` /
 `App/AppLock.swift`(+`LockGate`)
 
+### 스크린샷 기록 `PersonalOS/Capture/`
+
+Chase가 Zelle **송금 성공** 건만 알림 대상에서 빼놔서(취소·수취인 변경·만료는
+온다. 이체 알림 임계값은 이미 최소 $1.00) 메일로는 영영 못 잡는 구멍을 메운다.
+
+- `ReceiptScan.swift` — 파싱된 거래 + `ReceiptTextParser` (순수 로직)
+- `ReceiptOCR.swift` — Vision 온디바이스 텍스트 인식, 위→아래 정렬
+- `PendingCapture.swift` — 앱 그룹 경유로 인텐트 → 앱 본체 전달
+- `CaptureIntent.swift` — App Intent. **Share Extension이 아닌 이유**: 새 타겟이
+  필요해서 프로비저닝·Xcode Cloud 변수가 늘어난다. App Intent는 앱 타겟 안의
+  파일 하나면 되고, 단축어로 감싸면 공유 시트에 똑같이 뜬다.
+- `UI/CaptureReviewSheet.swift` — 확인 후 저장 + 사진 보관함 경로
+- `UI/CaptureGuideView.swift` — 단축어 만드는 법 (설정 → 연동)
+
+저장된 항목은 `sourceKind == "capture"` 라 검토 대기(`"email"` 기준)에
+안 들어간다. 사람이 이미 확인하고 누른 것이기 때문.
+
+### 공유 익스텐션 `ChoiceOS/`
+
+공유 시트 **앱 아이콘 줄**에 PersonalOS 가 뜨게 하는 길. App Intent 는 단축어
+앱에만 등록되고 공유 시트에는 그걸 감싼 단축어가 뜰 뿐이라, 앱을 직접 띄우려면
+익스텐션이 있어야 한다. 둘은 공존한다 — 단축어 경로도 그대로 쓸 수 있다.
+
+익스텐션에 넣는 파일은 **의존성이 없어야 한다.** `EntryKind`(원래
+`Templates.swift`)와 `WidgetShared`(원래 `WidgetSnapshot.swift`)를 각각
+`Core/EntryKind.swift` · `Core/AppGroup.swift` 로 떼어낸 이유가 이것이다.
+그대로 두면 익스텐션이 SwiftData 모델 레이어를 통째로 끌어온다.
+**이 두 파일에 import 를 추가하지 말 것.**
+
+익스텐션은 **얇다**: OCR → 앱 그룹에 적기 → `personalos://capture` 로 앱 열기.
+확인·저장은 앱 안의 `CaptureReviewSheet` 가 한다. SwiftData 저장소가 앱
+컨테이너에 있어서 익스텐션이 같은 DB 를 못 보기 때문이고, 앱 그룹으로 옮기는
+건 CloudKit 이 붙은 운영 데이터 이사라 위험 대비 이득이 없다.
+
+타겟 이름은 `ChoiceOS`(App Store 앱 이름과 같게 만들어졌다). 남은 배선과
+이미 해둔 것은 `ChoiceOS/SETUP.md`. 타겟 생성은 반드시 Xcode UI 로 할 것 —
+pbxproj 를 손으로 고쳐 타겟을 만들다 깨뜨리면 아카이브부터 다시 잃는다.
+
+**익스텐션의 `MARKETING_VERSION` 은 앱과 같아야 한다.** 다르면 App Store
+업로드에서 반려된다. 앱 버전 올릴 때 익스텐션도 같이 올릴 것.
+
+`Config/PersonalOS-Info.plist` 는 URL 스킴 등록용이다. `CFBundleURLTypes` 는
+배열 안 딕셔너리라 `INFOPLIST_KEY_` 로 표현이 안 된다. 동기화 폴더
+(`PersonalOS/`) 안에 두면 번들 리소스로도 복사돼 충돌하므로 밖에 둔다.
+
 ### 기타
 
 - `Tools/build_verse_clock.py` — 말씀 시계 JSON 생성기
@@ -138,6 +183,20 @@ Zelle 입금이 `받은 정산`인 이유: 대부분 룸메 공과금 정산금(
   (2026-07-08에 룸메 둘이 각자 $4.50씩 보냄)
 - 36시간 이내 + 금액 동일(±$0.005)
 
+### 3-3-b. `searchSenders` 는 **도메인**이어야 한다 (Gmail IMAP)
+
+RFC 3501 의 `SEARCH FROM` 은 From 헤더 부분일치지만 **Gmail 은 이 명령을 자기
+검색 엔진으로 처리해서 주소를 통째로 맞춘다.** 그래서 `alerts@chase.com` 으로
+검색하면 0통이 나온다 — 실제 발신자 `no.reply.alerts@chase.com` 의
+부분문자열인데도. 도메인(`chase.com`)으로 검색해야 잡힌다.
+
+가져온 뒤 `MailSource.senderDomains` 로 한 번 더 거르므로 넓게 잡아도 안전하다.
+**주소를 좁히는 방향으로 되돌리지 말 것.**
+
+증상이 "연결은 되는데 0통"이었고, `testConnection` 이 검색 오류를 `try?` 로
+삼켜서 빈 결과와 구분되지 않은 탓에 진단이 오래 걸렸다. 지금은 검색 실패와
+0건을 다른 문구로 보고한다.
+
 ### 3-4. 정기 결제 임계값
 
 ```
@@ -179,6 +238,124 @@ View 구조체에서 프로퍼티 래퍼 없는 `private var x = ...`는 memberw
 
 `kSecAttrAccessibleAfterFirstUnlock`. 기본값(WhenUnlocked)이면 잠긴 폰에서
 백그라운드 새로고침이 메일 비밀번호를 못 읽어 아무 일도 안 일어난다.
+
+### 3-9. 숫자 입력은 **문자열이 진실**이다 (소숫점 버그)
+
+`EntryDetailView`의 숫자 칸이 이런 왕복 바인딩이었다:
+
+```swift
+get: { Double → String }        // 모델을 다시 포맷해서 보여준다
+set: { String → Double }        // 입력을 즉시 Double로 접는다
+```
+
+"12" 뒤에 "."을 누르면 `Double("12.") == 12.0` → 다시 그리기 → `"12"`.
+**소숫점이 영영 안 찍힌다.** `TextField(value:format:)` 도 포맷터가 같은
+왕복을 해서 똑같이 막힌다 (운동 세트의 무게 칸이 그랬다).
+
+그래서 `UI/NumberField.swift`의 `PosNumberField`로 통일했다:
+
+- 편집 중에는 화면의 문자열이 진실. 모델에는 **완성된 숫자일 때만** 흘린다.
+- `"12."` · `"-"` 같은 중간 상태는 모델을 건드리지 않는다.
+- 모델이 밖에서 바뀌면(노션 pull) **포커스가 없을 때만** 다시 읽는다.
+
+**금지**: 숫자 칸에 `Binding<String>`의 get에서 모델을 포맷하거나
+`TextField(value:format:)`을 쓰는 형태로 되돌리는 것. 버그가 그대로 재발한다.
+
+### 3-9-b. 받은 정산은 **예산을 올린다**, 지출을 깎지 않는다
+
+받은 정산은 지출/수입 통계에 안 잡히지만(§3-1) 그 달에 실제로 더 쓸 수 있는
+돈이다. 룸메 몫까지 공과금 $876 을 내면 지출 $876 이 예산을 깎는데, 며칠 뒤
+$438 을 돌려받아도 예산은 $876 을 쓴 채로 남는다.
+
+그래서 `Core/BudgetMath.swift` 가 **실효 예산 = 설정 예산 + 그 달 받은 정산**
+을 계산하고, 대시보드 카드·가계부 화면·위젯이 전부 이걸 쓴다.
+
+**지출에서 빼지 않는 이유**: 어느 카테고리에서 빼야 할지 알 수 없고, 빼는
+순간 카테고리 분해와 일별 추이가 같이 흔들린다. 예산만 올리면 "얼마 썼나"는
+사실 그대로 두고 "얼마까지 쓸 수 있나"만 맞출 수 있다.
+
+주의 두 가지:
+
+- **세 화면이 같은 함수를 써야 한다.** 한 곳만 고치면 앱과 위젯의 "남은 예산"이
+  달라진다. 계산은 `BudgetMath` 한 군데에만 둘 것.
+- **예산 미설정(0)이면 정산이 있어도 0으로 둔다.** 정산만으로 예산이 생기면
+  "설정에서 월 예산을 정하세요" 안내가 사라져서 더 헷갈린다.
+- 올라간 이유는 화면에 적는다 (`예산 $3,000 + 받은 정산 $438 = $3,438`).
+  숫자가 설명 없이 늘어나면 오히려 안 믿게 된다.
+
+### 3-10. 키보드는 **바깥 아무 데나 탭**하면 내려간다 (완료 막대 아님)
+
+`.decimalPad` · `.numberPad` 에는 리턴 키가 없어서 한 번 올라오면 내릴 방법이
+없다. 처음엔 키보드 위에 "완료" 막대를 얹었는데 화면이 하나 더 생기는 꼴이라
+걷어냈다. 지금은 `posScreen()` 이 창(UIWindow)에 탭 인식기를 하나 달아둔다.
+
+SwiftUI 가 아니라 UIKit 인 이유:
+
+- `.onTapGesture` 를 화면 전체에 걸면 그 아래 버튼·리스트 행의 탭을 먹는다.
+  창 인식기에 `cancelsTouchesInView = false` 를 주면 터치가 그대로 흘러간다.
+- **입력 칸 위의 탭은 반드시 무시해야 한다.** 안 그러면 텍스트 필드를 누르는
+  순간 키보드가 올라왔다가 바로 내려간다. delegate 에서 터치가 닿은 뷰의
+  조상을 훑어 `UITextField`·`UITextView`·`UIControl` 이 있으면 안 받는다.
+
+설치는 창당 한 번만 되도록 막아뒀으니 여러 화면에 붙어도 괜찮다.
+`.scrollDismissesKeyboard(.interactively)` 는 그대로 같이 있다.
+
+### 3-11. 스크린샷 파서는 메일 파서와 **반대 원칙**으로 만든다
+
+메일 파서(§3-2)는 확인된 헤드라인이 정확히 맞을 때만 거래를 만든다 —
+틀리면 사용자 모르게 가계부가 오염되기 때문이다.
+
+`Capture/ReceiptScan.swift`는 반대로 **느슨하게 읽고 반드시 사람에게 보여준다.**
+저장은 확인 시트에서 사람이 누른다. 그래서 Zelle 전용 규칙을 박지 않고
+금액·상대·날짜·메모를 일반적인 규칙으로 뽑는다 — Venmo·Cash App·토스·
+종이 영수증까지 같은 코드로 들어온다.
+
+주의 세 가지:
+
+- **잔액 줄을 반드시 걸러야 한다.** 통장 잔고가 송금액보다 큰 게 보통이라
+  "가장 큰 금액" 규칙이 그대로 잔고를 집어간다 (`isBalanceLine`).
+- **Vision 결과를 위→아래로 다시 정렬해야 한다.** 관측 순서가 화면 순서가
+  아니라서, "라벨 다음 줄에 값" 배치를 못 읽게 된다.
+- **느슨한 `to` 규칙을 앞으로 당기지 말 것.** 아래 실물 화면 참고.
+
+#### 실물 Chase Zelle 확인 화면 (IMG_0751)
+
+```
+Confirmation
+We're sending your money now. Uzma Abbas will get it
+in a few minutes.
+$876.55
+U
+Uzma Abbas
+Registered as UZMA ABBAS
+(631) 922-2291
+Add a Siri shortcut, such as "Pay Uzma," to save time when
+sending money.
+Add to Siri
+Done
+```
+
+이 화면에 **To 라벨도, Amount 라벨도, 날짜도 없다.** 처음엔 있을 거라 가정하고
+짰다가 실물 보고 다 고쳤다. 지금 `counterparty(in:)` 의 순서는 이 화면에서
+나온 것이다:
+
+1. `Registered as ○○` **윗줄** — 보기 좋은 표기의 이름이 거기 있다
+2. `… NAME will get it` — 마침표 뒤 마지막 조각
+3. `To` / `Recipient` 라벨
+4. 한 줄 안의 `to ○○` — **금액이 같은 줄에 있거나 You sent/You paid 로
+   시작할 때만**
+
+4번을 앞으로 당기거나 조건을 풀면 맨 아래 안내 문장의
+`"Pay Uzma," **to** save time when sending money.` 를 물어서 받는 사람을
+`save time when sending money.` 로 읽는다. 실제로 그랬다.
+
+날짜는 화면에 없으므로 `nil` 이 정상이고, 확인 시트가 현재 시각으로 채운다
+(스크린샷은 송금 직후에 찍히니까 맞는 값이다).
+
+출처가 "Zelle" 인 것도 글자가 아니라 **`Registered as` + `will get it` 조합**
+으로 알아낸다 — 보라색 Z 는 로고라 OCR 이 못 읽는다.
+
+파서를 고치면 `Tools/tests/receipt_parse_check.py` 를 같이 고칠 것.
 
 ---
 
@@ -281,6 +458,8 @@ App Store 공개 배포엔 허락 필요.
 INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "com.calebsung.PersonalOS.mailrefresh"
 INFOPLIST_KEY_UIBackgroundModes[sdk=iphone*] = fetch
 INFOPLIST_KEY_NSFaceIDUsageDescription = "..."
+INFOPLIST_KEY_NSHealthShareUsageDescription = "..."
+INFOPLIST_KEY_NSHealthUpdateUsageDescription = "..."
 INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
 SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx"   ← xros 제거
 ```
@@ -288,6 +467,38 @@ SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx"   ← xros 제거
 `BGTaskSchedulerPermittedIdentifiers`가 **배열이 아니라 문자열로 들어갈 수
 있다** — Xcode Info 탭에서 확인하고 아니면 수동으로 Array로 고쳐야 한다.
 안 고쳐도 앱은 정상, 백그라운드 수집만 안 됨.
+
+### HealthKit purpose string — 에러 90683 (아카이브 실패의 진짜 원인)
+
+`Preparing build for App Store Connect failed` 로만 보이던 실패의 정체는
+App Store Connect → TestFlight → 해당 빌드 → Errors 안에 있었다:
+
+```
+90683: Missing purpose string in Info.plist.
+  ... should contain a NSHealthShareUsageDescription key ...
+  ... should contain a NSHealthUpdateUsageDescription key ...
+```
+
+원인: `Workout/HealthKitService.swift` 가 `import HealthKit` 하는데
+pbxproj에 위 두 키가 없었다. **엔타이틀먼트·아이콘·버전 충돌은 전부
+무관했다** — 그쪽을 건드리며 날린 빌드가 여러 개다.
+
+규칙: 민감 API를 하나라도 링크하면 purpose string은 **엔타이틀먼트를 빼도
+필요하다.** Apple은 엔타이틀먼트가 아니라 *코드가 그 API를 참조하는지* 를
+본다. 그래서 "HealthKit 권한을 껐으니 괜찮겠지"가 통하지 않는다.
+
+이 프로젝트는 `GENERATE_INFOPLIST_FILE = YES` 라 Info.plist 파일이 없다.
+purpose string은 반드시 `INFOPLIST_KEY_*` 빌드 설정으로 넣어야 하고,
+**Debug/Release 두 블록 모두**에 넣어야 한다.
+
+새 프레임워크를 추가할 때 확인할 것:
+
+```
+grep -rho "^import .*" PersonalOS --include=*.swift | sort -u
+```
+
+현재 purpose string이 필요한 것: EventKit(NSCalendarsFullAccess),
+LocalAuthentication(NSFaceID), HealthKit(NSHealthShare/NSHealthUpdate).
 
 ### 앱 아이콘
 
